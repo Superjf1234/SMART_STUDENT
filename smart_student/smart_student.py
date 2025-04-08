@@ -98,6 +98,7 @@ class AppState(rx.State):
     is_loading_stats: bool = False
     stats_history: list = []
     error_message_ui: str = ""
+    funcionalidades: dict = {}  # Estado para funcionalidades
 
     # --- Event Handlers ---
     def handle_login(self):
@@ -191,6 +192,9 @@ class AppState(rx.State):
         # Lógica para iniciar un repaso basado en una entrada del historial
         # Podría re-seleccionar el curso/libro/tema y quizás generar una nueva eval
         pass
+
+    async def get_funcionalidades(self):
+        self.funcionalidades = config_logic.obtener_funcionalidades()
 
 
 # --- Fin AppState ---
@@ -380,6 +384,31 @@ def estadisticas_tab_content() -> rx.Component:
     return rx.box(rx.text("Contenido Estadísticas (Pendiente)"), padding="1em")
 
 
+def funcionalidades_component() -> rx.Component:
+    return rx.box(
+        rx.heading("Funcionalidades Disponibles", size="5"),
+        rx.button("Cargar Funcionalidades", on_click=AppState.get_funcionalidades),
+        rx.cond(
+            AppState.funcionalidades,
+            rx.vstack(
+                *[
+                    rx.box(
+                        rx.heading(func, size="4"),
+                        rx.text(desc, white_space="pre-wrap"),
+                        padding="1em",
+                        border="1px solid var(--accent-4)",
+                        border_radius="8px",
+                        margin_bottom="1em",
+                    )
+                    for func, desc in AppState.funcionalidades.items()
+                ]
+            ),
+        ),
+        padding="1em",
+        width="100%",
+    )
+
+
 # --- DASHBOARD PRINCIPAL (Pestañas restauradas, estilos simplificados) ---
 def main_dashboard() -> rx.Component:
     """Dashboard con pestañas funcionales y estilos simplificados."""
@@ -417,6 +446,7 @@ def main_dashboard() -> rx.Component:
                 rx.tabs.trigger(rx.hstack(rx.icon("git-fork", size=16), rx.text("Mapas"), spacing="2"), value="mapa"),
                 rx.tabs.trigger(rx.hstack(rx.icon("clipboard-check", size=16), rx.text("Evaluación"), spacing="2"), value="evaluacion"),
                 rx.tabs.trigger(rx.hstack(rx.icon("bar-chart-3", size=16), rx.text("Estadísticas"), spacing="2"), value="estadisticas"),
+                rx.tabs.trigger(rx.hstack(rx.icon("list-check", size=16), rx.text("Funcionalidades"), spacing="2"), value="funcionalidades"),
                 width="100%",
                 padding_x="1.5em",
                 border_bottom="1px solid var(--accent-6)",
@@ -427,6 +457,7 @@ def main_dashboard() -> rx.Component:
                 rx.tabs.content(mapa_tab_content(), value="mapa"),
                 rx.tabs.content(evaluacion_tab_content(), value="evaluacion"),
                 rx.tabs.content(estadisticas_tab_content(), value="estadisticas"),
+                rx.tabs.content(funcionalidades_component(), value="funcionalidades"),
                 padding_top="1em",
                 padding_x="1.5em", # Padding horizontal consistente
                 width="100%"
