@@ -33,7 +33,6 @@ except ImportError:
 
 def formatear_puntos(puntos_texto):
     """Formatea puntos clave: numera, limpia intros/asteriscos, limita palabras."""
-    # (Misma lógica de formateo que la versión anterior, revisada para claridad)
     if not puntos_texto or not isinstance(puntos_texto, str):
         return "No se generaron puntos relevantes o el formato es incorrecto."
 
@@ -63,7 +62,6 @@ def formatear_puntos(puntos_texto):
             continue
 
         texto_analisis = linea_strip
-        # Quitar prefijo solo para análisis de intro
         if len(texto_analisis) > 1:
             if texto_analisis[0].isdigit() and texto_analisis[1] in ".)":
                 texto_analisis = texto_analisis[2:].strip()
@@ -79,10 +77,8 @@ def formatear_puntos(puntos_texto):
             is_intro = True
 
         if is_intro:
-            # print(f"DEBUG formatear_puntos: Ignorando línea intro/header: '{linea_strip}'")
             continue
 
-        # Limpieza final del texto del punto
         punto_texto_final = linea_strip
         if len(punto_texto_final) > 1:
             if punto_texto_final[0].isdigit() and punto_texto_final[1] in ".)":
@@ -91,13 +87,12 @@ def formatear_puntos(puntos_texto):
                 punto_texto_final = punto_texto_final[1:].strip()
         punto_texto_final = punto_texto_final.replace("**", "")
 
-        # Limitar palabras y añadir numeración
         palabras = punto_texto_final.split()
-        max_palabras = 15  # Límite de palabras
-        max_puntos = 7  # Límite de puntos
+        max_palabras = 15
+        max_puntos = 7
         if len(palabras) > 0 and contador <= max_puntos:
-            texto_punto = " ".join(palabras[:max_palabras])  # Trunca si excede
-            puntos_finales.append(f"{contador}. {texto_punto}\n")  # Salto simple
+            texto_punto = " ".join(palabras[:max_palabras])
+            puntos_finales.append(f"{contador}. {texto_punto}\n")
             contador += 1
 
         if contador > max_puntos:
@@ -113,7 +108,6 @@ def formatear_puntos(puntos_texto):
 
 def formatear_resumen(resumen_texto, tema_solicitado):
     """Formatea el resumen: elimina títulos/intros no deseados y asteriscos."""
-    # (Misma lógica de formateo que la versión anterior, revisada)
     if not resumen_texto or not isinstance(resumen_texto, str):
         return "No se generó un resumen o el formato es incorrecto."
 
@@ -134,13 +128,11 @@ def formatear_resumen(resumen_texto, tema_solicitado):
 
     for linea in lines:
         linea_strip = linea.strip()
-        # Comprobar si es un título/intro no deseado (ignorando mayúsculas/minúsculas y espacios extra)
         is_unwanted = any(
             unwanted.lower() in linea_strip.lower() for unwanted in unwanted_titles
         )
 
         if not start_processing:
-            # Empezar si NO es basura Y parece contenido real
             if (
                 not is_unwanted
                 and linea_strip
@@ -153,21 +145,18 @@ def formatear_resumen(resumen_texto, tema_solicitado):
                 start_processing = True
             elif (
                 not is_unwanted and not linea_strip
-            ):  # Permitir empezar con línea vacía si no es basura
+            ):
                 start_processing = True
             else:
-                # print(f"DEBUG formatear_resumen: Saltando línea inicial: '{linea_strip}'")
                 continue
 
         if is_unwanted:
-            # print(f"DEBUG formatear_resumen: Eliminando título/intro: '{linea_strip}'")
             continue
 
-        # Eliminar ** y añadir línea limpia
         linea_final = linea.replace("**", "")
         cleaned_lines.append(
             linea_final
-        )  # Mantener saltos de línea originales entre párrafos limpios
+        )
 
     return "\n".join(cleaned_lines).strip()
 
@@ -194,7 +183,6 @@ def generar_resumen_logica(curso, libro, tema, gen_puntos):
         return resultado
 
     try:
-        # 1. Extraer Texto PDF (usa config_logic y lanza excepciones)
         print("INFO (resumen_logic): Extrayendo texto PDF...")
         archivo = config_logic.CURSOS.get(curso, {}).get(libro)
         if not archivo:
@@ -206,17 +194,15 @@ def generar_resumen_logica(curso, libro, tema, gen_puntos):
             return resultado
         texto_pdf = config_logic.extraer_texto_pdf(
             curso, archivo
-        )  # Puede lanzar FileNotFoundError, IOError
+        )
         print(f"INFO (resumen_logic): Texto extraído ({len(texto_pdf)} chars).")
 
-        # 2. Generar Resumen (API)
         print("INFO (resumen_logic): Llamando API para resumen...")
         prompt_resumen = (
             f"Genera un resumen EXTENSO y DETALLADO sobre '{tema}' basado ESTRICTAMENTE en el texto proporcionado. "
             f"Estructura sugerida si aplica:\n1. [Título sección]:\n   [Contenido]\n2. [Título sección]:\n   [Contenido]\n...\nN. Conclusión:\n   [Contenido]\n\n"
             f"NO añadas introducciones como 'Aquí está el resumen'. Empieza directo con el contenido.\nTexto:\n{texto_pdf}"
         )
-        # llamar_api_gemini devuelve texto o string de error
         resumen_raw = config_logic.llamar_api_gemini(prompt_resumen)
 
         if isinstance(resumen_raw, str) and "Error" in resumen_raw[:10]:
@@ -225,7 +211,6 @@ def generar_resumen_logica(curso, libro, tema, gen_puntos):
                 file=sys.stderr,
             )
             resultado["message"] = f"API no generó resumen válido: {resumen_raw}"
-            # No poner status ERROR_API_RESUMEN aún, por si los puntos funcionan
         elif isinstance(resumen_raw, str) and resumen_raw.strip():
             print("INFO (resumen_logic): Resumen recibido, formateando...")
             resultado["resumen"] = formatear_resumen(resumen_raw, tema)
@@ -236,7 +221,6 @@ def generar_resumen_logica(curso, libro, tema, gen_puntos):
             )
             resultado["message"] = "API no generó contenido para el resumen."
 
-        # 3. Generar Puntos Clave (API, si se solicitó)
         if gen_puntos:
             print("INFO (resumen_logic): Llamando API para puntos clave...")
             prompt_puntos = (
@@ -252,7 +236,7 @@ def generar_resumen_logica(curso, libro, tema, gen_puntos):
                     file=sys.stderr,
                 )
                 resultado["puntos"] = (
-                    f"Error al generar puntos: {puntos_raw}"  # Guardar mensaje de error
+                    f"Error al generar puntos: {puntos_raw}"
                 )
             elif isinstance(puntos_raw, str) and puntos_raw.strip():
                 print("INFO (resumen_logic): Puntos recibidos, formateando...")
@@ -264,15 +248,13 @@ def generar_resumen_logica(curso, libro, tema, gen_puntos):
                 )
                 resultado["puntos"] = "La API no generó puntos relevantes."
         else:
-            resultado["puntos"] = None  # No se pidieron
+            resultado["puntos"] = None
 
-        # Determinar status final
         if resultado["resumen"] or (
             gen_puntos
             and resultado["puntos"]
             and "Error" not in str(resultado["puntos"])[:10]
         ):
-            # Éxito si al menos el resumen o los puntos (si se pidieron y no dieron error API) se generaron
             resultado["status"] = "EXITO"
             resultado["message"] = "Generación completada."
             if not resultado["resumen"]:
@@ -283,7 +265,7 @@ def generar_resumen_logica(curso, libro, tema, gen_puntos):
                 resultado["message"] += " (Advertencia: Falló generación de puntos)."
         elif (
             not resultado["message"] or resultado["message"] == "Error desconocido"
-        ):  # Si no hubo errores específicos pero tampoco contenido
+        ):
             resultado["status"] = "ERROR_API_GENERAL"
             resultado["message"] = "La API no generó contenido útil."
             print(f"ERROR (resumen_logic): {resultado['message']}", file=sys.stderr)
@@ -295,7 +277,7 @@ def generar_resumen_logica(curso, libro, tema, gen_puntos):
         )
         resultado["status"] = "ERROR_PDF_NOT_FOUND"
         resultado["message"] = (
-            f"No se encontró el archivo PDF: {os.path.basename(str(e_fnf))}"  # Más conciso
+            f"No se encontró el archivo PDF: {os.path.basename(str(e_fnf))}"
         )
     except IOError as e_io:
         print(f"ERROR (resumen_logic): Error de lectura PDF - {e_io}", file=sys.stderr)
@@ -326,7 +308,6 @@ def generar_resumen_pdf_bytes(resumen_txt, puntos_txt, curso, libro, tema):
         )
         return None
 
-    # Asegurar que tenemos algún texto para poner en el PDF
     resumen_valido = (
         resumen_txt and isinstance(resumen_txt, str) and resumen_txt.strip()
     )
@@ -346,13 +327,11 @@ def generar_resumen_pdf_bytes(resumen_txt, puntos_txt, curso, libro, tema):
     try:
         pdf = FPDF()
         pdf.add_page()
-        # Usar márgenes estándar
         pdf.set_left_margin(15)
         pdf.set_right_margin(15)
         pdf.set_top_margin(15)
-        pdf.set_auto_page_break(auto=True, margin=15)  # Margen inferior
+        pdf.set_auto_page_break(auto=True, margin=15)
 
-        # Título Principal (Codificado correctamente)
         pdf.set_font("Helvetica", "B", 16)
         titulo = f"Resumen: {tema}"
         pdf.cell(
@@ -364,7 +343,6 @@ def generar_resumen_pdf_bytes(resumen_txt, puntos_txt, curso, libro, tema):
         )
         pdf.ln(5)
 
-        # Metadatos (Codificado correctamente)
         pdf.set_font("Helvetica", "I", 10)
         meta = f"Curso: {curso} | Libro: {libro}"
         pdf.cell(
@@ -376,31 +354,26 @@ def generar_resumen_pdf_bytes(resumen_txt, puntos_txt, curso, libro, tema):
         )
         pdf.ln(8)
 
-        # --- Contenido del Resumen ---
         if resumen_valido:
             pdf.set_font("Helvetica", "B", 13)
             pdf.cell(0, 8, "RESUMEN DETALLADO", ln=True)
             pdf.ln(2)
             pdf.set_font("Helvetica", "", 11)
-            # Codificar a latin-1 reemplazando caracteres no soportados para FPDF base
             resumen_latin1 = resumen_txt.encode("latin-1", "replace").decode("latin-1")
             pdf.multi_cell(
                 0, 6, resumen_latin1
-            )  # Usar multi_cell para manejo automático de saltos
+            )
 
-        # --- Contenido de Puntos Clave ---
         if puntos_validos:
             if resumen_valido:
-                pdf.ln(10)  # Añadir separación si hubo resumen
+                pdf.ln(10)
             pdf.set_font("Helvetica", "B", 13)
             pdf.cell(0, 8, "PUNTOS RELEVANTES", ln=True)
             pdf.ln(2)
             pdf.set_font("Helvetica", "", 11)
             puntos_latin1 = puntos_txt.encode("latin-1", "replace").decode("latin-1")
-            pdf.multi_cell(0, 6, puntos_latin1)  # multi_cell para formateo
+            pdf.multi_cell(0, 6, puntos_latin1)
 
-        # Generar PDF en memoria como bytes
-        # Usar 'latin-1' para la salida de FPDF si esa fue la codificación usada internamente
         pdf_bytes = pdf.output(dest="S").encode("latin-1")
         print(
             f"INFO (resumen_logic): PDF generado en memoria ({len(pdf_bytes)} bytes)."
@@ -413,38 +386,6 @@ def generar_resumen_pdf_bytes(resumen_txt, puntos_txt, curso, libro, tema):
         return None
 
 
-# --- NO hay interfaz gráfica aquí ---
-
 if __name__ == "__main__":
     print("--- Ejecutando pruebas de resumen_logic.py ---")
-    # Ejemplo de prueba (requiere config_logic funcional y quizás archivos PDF dummy)
-    # test_curso = "1ro Medio"
-    # test_libro = "Biología"
-    # test_tema = "La Célula"
-    # print(f"\nGenerando resumen y puntos para {test_curso}/{test_libro}/{test_tema}...")
-    # resultado = generar_resumen_logica(test_curso, test_libro, test_tema, gen_puntos=True)
-    # print("\nResultado Generación:")
-    # print(f"  Status: {resultado['status']}")
-    # print(f"  Message: {resultado['message']}")
-    # print(f"  Resumen: {str(resultado['resumen'])[:200]}...")
-    # print(f"  Puntos: {resultado['puntos']}")
-
-    # if resultado['status'] == 'EXITO':
-    #      print("\nGenerando PDF bytes...")
-    #      pdf_data = generar_resumen_pdf_bytes(
-    #           resultado['resumen'], resultado['puntos'],
-    #           test_curso, test_libro, test_tema
-    #      )
-    #      if pdf_data:
-    #          print(f"  PDF generado ({len(pdf_data)} bytes).")
-    #          # Opcional: Guardar para verificar
-    #          # try:
-    #          #     with open("test_resumen.pdf", "wb") as f:
-    #          #         f.write(pdf_data)
-    #          #     print("  PDF guardado como test_resumen.pdf")
-    #          # except Exception as e_write:
-    #          #     print(f"  Error guardando PDF de prueba: {e_write}")
-    #      else:
-    #          print("  Fallo al generar PDF bytes.")
-
     print("\n--- Pruebas resumen_logic.py finalizadas ---")

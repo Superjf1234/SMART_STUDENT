@@ -19,15 +19,10 @@ except ImportError:
     import config_logic
     import db_logic
 
-# --- Funciones de Generación y Parseo (Basadas en tu versión Kivy) ---
-
-
 def generar_preguntas(libro, tema, texto_pdf):
     """Genera texto crudo de preguntas (3 tipos) usando la API Gemini."""
-    # NOTA: Esta función ahora usa config_logic.llamar_api_gemini
     print(f"INFO (eval_logic): Generando preguntas para L={libro}, T={tema}")
     preguntas_texto = {"alt": "", "vf": "", "sm": ""}
-    # Prompts (pueden ser los mismos que en tu versión Kivy/Tkinter)
     prompt_alt = (
         f"Genera EXACTAMENTE 5 preguntas de opción múltiple sobre '{tema}' del libro '{libro}', basado en el texto. "
         f"Formato: 4 alternativas (a, b, c, d), marca solo UNA correcta con '(correcta)'. "
@@ -48,28 +43,31 @@ def generar_preguntas(libro, tema, texto_pdf):
         f"(Repetir para 5 preguntas)\nTexto base:\n{texto_pdf}"
     )
 
-    # Llamadas a la API (usando la función adaptada en config_logic)
-    print("INFO (eval_logic): API call - Alternativas...")
-    preguntas_texto["alt"] = config_logic.llamar_api_gemini(prompt_alt)
-    print("INFO (eval_logic): API call - V/F...")
-    preguntas_texto["vf"] = config_logic.llamar_api_gemini(prompt_vf)
-    print("INFO (eval_logic): API call - Selección Múltiple...")
-    preguntas_texto["sm"] = config_logic.llamar_api_gemini(prompt_sm)
+    try:
+        print("INFO (eval_logic): API call - Alternativas...")
+        preguntas_texto["alt"] = config_logic.llamar_api_gemini(prompt_alt)
+        print("INFO (eval_logic): API call - V/F...")
+        preguntas_texto["vf"] = config_logic.llamar_api_gemini(prompt_vf)
+        print("INFO (eval_logic): API call - Selección Múltiple...")
+        preguntas_texto["sm"] = config_logic.llamar_api_gemini(prompt_sm)
+        print("INFO (eval_logic): Llamadas API completadas.")
+    except Exception as e:
+        print(f"ERROR (eval_logic): Error al llamar a la API - {e}", file=sys.stderr)
+        traceback.print_exc()
+        return {
+            "alternativas": "Error al generar preguntas de alternativas.",
+            "verdadero_falso": "Error al generar preguntas de verdadero/falso.",
+            "seleccion_multiple": "Error al generar preguntas de selección múltiple.",
+        }
 
-    print("INFO (eval_logic): Llamadas API completadas.")
-    # Devolver directamente el diccionario con los textos o mensajes de error
     return {
         "alternativas": preguntas_texto["alt"],
         "verdadero_falso": preguntas_texto["vf"],
         "seleccion_multiple": preguntas_texto["sm"],
     }
 
-
 def parsear_preguntas(texto_raw, tipo_evaluacion):
     """Parsea el texto crudo de preguntas de la API en una lista de diccionarios estructurados."""
-    # Esta función es principalmente lógica de procesamiento de strings,
-    # debería funcionar igual que tu versión Kivy.
-    # Asegúrate que no tenga dependencias ocultas de UI.
     preguntas = []
     if (
         not texto_raw
@@ -81,7 +79,7 @@ def parsear_preguntas(texto_raw, tipo_evaluacion):
             f"WARN (eval_logic): Texto vacío, erróneo o sin 'Pregunta' para parsear tipo {tipo_evaluacion}: {texto_raw[:100]}...",
             file=sys.stderr,
         )
-        return preguntas  # Devuelve lista vacía si el texto de entrada ya indica error
+        return preguntas
 
     lineas = texto_raw.strip().split("\n")
     pregunta_actual = None
@@ -92,7 +90,6 @@ def parsear_preguntas(texto_raw, tipo_evaluacion):
             continue
 
         if linea.startswith("Pregunta ") and ":" in linea:
-            # --- Bloque para guardar pregunta anterior (sin cambios funcionales) ---
             if pregunta_actual:
                 if pregunta_actual.get("alternativas"):
                     tipo_prev = pregunta_actual.get("tipo")
@@ -104,23 +101,18 @@ def parsear_preguntas(texto_raw, tipo_evaluacion):
                     expected_alts = 2 if tipo_prev == "verdadero_falso" else 4
                     if (
                         len(alts_prev) == expected_alts and exp_prev
-                    ):  # Requiere explicación
+                    ):
                         if tipo_prev == "seleccion_multiple" and corrs_prev:
                             is_valid = True
                         elif tipo_prev != "seleccion_multiple" and corr_prev:
                             is_valid = True
                     if is_valid:
-                        print(
-                            f"DEBUG (parse): Añadiendo pregunta válida: {pregunta_actual.get('pregunta')[:30]}..."
-                        )
                         preguntas.append(pregunta_actual)
                     else:
                         print(
                             f"WARN (parse): Descartando pregunta incompleta: {pregunta_actual.get('pregunta')[:30]}..."
                         )
-            # --- Fin bloque guardar ---
 
-            # Iniciar nueva pregunta
             try:
                 pregunta_texto = linea.split(":", 1)[1].strip()
                 if not pregunta_texto:
@@ -133,9 +125,6 @@ def parsear_preguntas(texto_raw, tipo_evaluacion):
                     "correctas": [],
                     "explicacion": "",
                 }
-                print(
-                    f"\nDEBUG (parse): Nueva Pregunta ({tipo_evaluacion}): {pregunta_texto[:50]}..."
-                )
             except IndexError:
                 print(
                     f"WARN (parse): Línea pregunta mal formada: '{linea}'",
@@ -150,7 +139,6 @@ def parsear_preguntas(texto_raw, tipo_evaluacion):
             and linea[0].isalpha()
             and linea[1] in ".)"
         ):
-            # Procesar alternativas (sin cambios funcionales)
             try:
                 letra = linea[0].lower()
                 texto_alt_raw = linea.split(")", 1)[1].strip()
@@ -160,12 +148,9 @@ def parsear_preguntas(texto_raw, tipo_evaluacion):
                     .replace("(Correcta)", "")
                     .strip()
                 )
-                if texto_alt_limpio:  # Solo añadir si tiene texto
+                if texto_alt_limpio:
                     pregunta_actual["alternativas"].append(
                         {"letra": letra, "texto": texto_alt_limpio}
-                    )
-                    print(
-                        f"  DEBUG (parse): Alt {letra}: '{texto_alt_limpio}' (Correcta: {es_correcta})"
                     )
                     if es_correcta:
                         if tipo_evaluacion == "seleccion_multiple":
@@ -182,14 +167,10 @@ def parsear_preguntas(texto_raw, tipo_evaluacion):
                 continue
 
         elif pregunta_actual and linea.startswith("Explicación:"):
-            # Procesar explicación (sin cambios funcionales)
             try:
                 exp_texto = linea.split(":", 1)[1].strip()
-                if exp_texto:  # Solo guardar si tiene texto
+                if exp_texto:
                     pregunta_actual["explicacion"] = exp_texto
-                    print(
-                        f"  DEBUG (parse): Explicación encontrada: '{exp_texto[:50]}...'"
-                    )
             except IndexError:
                 print(
                     f"WARN (parse): Línea explicación mal formada: '{linea}'",
@@ -197,9 +178,7 @@ def parsear_preguntas(texto_raw, tipo_evaluacion):
                 )
                 pregunta_actual["explicacion"] = "[Error al parsear explicación]"
 
-    # Añadir la última pregunta parseada si es válida
     if pregunta_actual:
-        # --- Bloque para guardar última pregunta (sin cambios funcionales) ---
         if pregunta_actual.get("alternativas"):
             tipo_prev = pregunta_actual.get("tipo")
             alts_prev = pregunta_actual.get("alternativas", [])
@@ -208,27 +187,19 @@ def parsear_preguntas(texto_raw, tipo_evaluacion):
             exp_prev = pregunta_actual.get("explicacion")
             is_valid = False
             expected_alts = 2 if tipo_prev == "verdadero_falso" else 4
-            if len(alts_prev) == expected_alts and exp_prev:  # Requiere explicación
+            if len(alts_prev) == expected_alts and exp_prev:
                 if tipo_prev == "seleccion_multiple" and corrs_prev:
                     is_valid = True
                 elif tipo_prev != "seleccion_multiple" and corr_prev:
                     is_valid = True
             if is_valid:
-                print(
-                    f"DEBUG (parse): Añadiendo última pregunta válida: {pregunta_actual.get('pregunta')[:30]}..."
-                )
                 preguntas.append(pregunta_actual)
             else:
                 print(
                     f"WARN (parse): Descartando última pregunta incompleta: {pregunta_actual.get('pregunta')[:30]}..."
                 )
-        # --- Fin bloque guardar ---
 
-    print(
-        f"INFO (eval_logic): Parseadas {len(preguntas)} preguntas válidas de tipo {tipo_evaluacion}."
-    )
     return preguntas
-
 
 def generar_evaluacion_logica(curso, libro, tema):
     """
@@ -247,9 +218,7 @@ def generar_evaluacion_logica(curso, libro, tema):
         return resultado
 
     try:
-        # 1. Extraer Texto PDF
         print("INFO (eval_logic): Extrayendo texto PDF...")
-        # Usa la función adaptada de config_logic, que lanza excepciones
         archivo = config_logic.CURSOS.get(curso, {}).get(libro)
         if not archivo:
             resultado["message"] = (
@@ -258,16 +227,12 @@ def generar_evaluacion_logica(curso, libro, tema):
             resultado["status"] = "ERROR_CONFIG"
             print(f"ERROR (eval_logic): {resultado['message']}")
             return resultado
-        # Esta llamada ahora puede lanzar FileNotFoundError o IOError
         texto_pdf = config_logic.extraer_texto_pdf(curso, archivo)
         print(f"INFO (eval_logic): Texto extraído ({len(texto_pdf)} chars).")
 
-        # 2. Generar Texto Crudo de Preguntas (API)
         preguntas_generadas_raw = generar_preguntas(libro, tema, texto_pdf)
 
-        # Verificar errores generales de API
         api_errors = []
-        # Chequeo más robusto de errores devueltos por llamar_api_gemini
         for tipo, texto in preguntas_generadas_raw.items():
             if not isinstance(texto, str) or "Error" in texto[:10] or not texto.strip():
                 error_info = (
@@ -276,7 +241,6 @@ def generar_evaluacion_logica(curso, libro, tema):
                 api_errors.append(error_info)
                 print(f"WARN (eval_logic): Problema API detectado - {error_info}")
 
-        # Si los 3 tipos fallaron o retornaron error
         if len(api_errors) == 3:
             resultado["message"] = (
                 "La API falló o retornó error/vacío para los 3 tipos de pregunta.\nErrores:\n"
@@ -287,13 +251,10 @@ def generar_evaluacion_logica(curso, libro, tema):
             return resultado
         elif api_errors:
             print(f"WARN (eval_logic): Errores parciales de API: {api_errors}")
-            # Continuar con los tipos que sí funcionaron
 
-        # 3. Parsear Preguntas
         print("INFO (eval_logic): Parseando preguntas generadas...")
         preguntas_parseadas_total = []
         for tipo, texto in preguntas_generadas_raw.items():
-            # Solo intentar parsear si no hubo error y hay texto
             if isinstance(texto, str) and "Error" not in texto[:10] and texto.strip():
                 try:
                     preguntas_parseadas_tipo = parsear_preguntas(texto, tipo)
@@ -303,8 +264,7 @@ def generar_evaluacion_logica(curso, libro, tema):
                         f"ERROR (eval_logic): Excepción parseando tipo '{tipo}': {e_parse}",
                         file=sys.stderr,
                     )
-                    traceback.print_exc()  # Loggear el error de parseo
-                    # Considerar añadir una advertencia al mensaje final si falla el parseo
+                    traceback.print_exc()
             else:
                 print(
                     f"INFO (eval_logic): Saltando parseo para tipo '{tipo}' debido a error/respuesta vacía API."
@@ -320,7 +280,6 @@ def generar_evaluacion_logica(curso, libro, tema):
             print(f"ERROR (eval_logic): {resultado['message']}")
             return resultado
 
-        # 4. Mezclar y Preparar Resultado
         random.shuffle(preguntas_parseadas_total)
         resultado["preguntas"] = preguntas_parseadas_total
         resultado["status"] = "EXITO"
@@ -356,11 +315,9 @@ def generar_evaluacion_logica(curso, libro, tema):
     print(f"INFO (eval_logic): Finalizado. Status: {resultado['status']}")
     return resultado
 
-
 def calcular_resultado_logica(preguntas_originales, respuestas_usuario):
     """
     Calcula la nota final basada en las preguntas y las respuestas del usuario.
-    (Sin cambios funcionales respecto a la versión Kivy, pero revisado).
     Retorna: dict {'score': float, 'correct_count': int, 'total_questions': int} o None si hay error grave.
     """
     if (
@@ -372,7 +329,7 @@ def calcular_resultado_logica(preguntas_originales, respuestas_usuario):
             f"ERROR (eval_logic): Discrepancia preguntas ({len(preguntas_originales)}) / respuestas ({len(respuestas_usuario)}) o formato incorrecto.",
             file=sys.stderr,
         )
-        return None  # Error grave
+        return None
 
     notas = []
     correctas_count = 0
@@ -380,12 +337,11 @@ def calcular_resultado_logica(preguntas_originales, respuestas_usuario):
 
     for idx, q in enumerate(preguntas_originales):
         tipo = q.get("tipo")
-        # Obtener respuesta del diccionario, None si no existe para ese índice
         respuesta_usr = respuestas_usuario.get(idx)
-        nota_pregunta = 1.0  # Nota mínima
+        nota_pregunta = 1.0
 
         try:
-            if respuesta_usr is not None:  # Solo evaluar si el usuario respondió algo
+            if respuesta_usr is not None:
                 if tipo == "alternativas" or tipo == "verdadero_falso":
                     resp_correcta = q.get("correcta")
                     if (
@@ -397,7 +353,6 @@ def calcular_resultado_logica(preguntas_originales, respuestas_usuario):
                         correctas_count += 1
                 elif tipo == "seleccion_multiple":
                     resp_correctas_set = set(q.get("correctas", []))
-                    # Asegurar que la respuesta del usuario sea un set de letras minúsculas
                     resp_usr_set = (
                         set(str(r).lower() for r in respuesta_usr)
                         if isinstance(respuesta_usr, set)
@@ -417,11 +372,11 @@ def calcular_resultado_logica(preguntas_originales, respuestas_usuario):
                 file=sys.stderr,
             )
             traceback.print_exc()
-            nota_pregunta = 1.0  # Asignar mínima si hay error en esta pregunta
+            nota_pregunta = 1.0
 
         notas.append(nota_pregunta)
 
-    if not notas:  # Si no se pudo calcular ninguna nota (muy raro)
+    if not notas:
         print("ERROR (eval_logic calc): No se calcularon notas.", file=sys.stderr)
         return {"score": 1.0, "correct_count": 0, "total_questions": total_questions}
 
@@ -436,8 +391,6 @@ def calcular_resultado_logica(preguntas_originales, respuestas_usuario):
         "total_questions": total_questions,
     }
 
-
-# --- MODIFICADA ---
 def guardar_resultado_evaluacion(username, curso, libro, tema, nota):
     """
     Guarda el resultado de una evaluación en la base de datos usando db_logic.
@@ -453,10 +406,9 @@ def guardar_resultado_evaluacion(username, curso, libro, tema, nota):
         )
         return False
     try:
-        # Llama a la función MODIFICADA de db_logic pasándole el username
         exito = db_logic.guardar_evaluacion(
             username, curso, libro, tema, nota
-        )  # <-- Pasar username
+        )
         if exito:
             print("INFO (eval_logic): Resultado guardado vía db_logic.")
             return True
@@ -473,6 +425,3 @@ def guardar_resultado_evaluacion(username, curso, libro, tema, nota):
         )
         traceback.print_exc()
         return False
-
-
-# --- NO hay interfaz gráfica aquí ---

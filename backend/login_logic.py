@@ -3,33 +3,32 @@
 
 import sys
 import traceback
+import logging
+
+# Configurar el logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Importar la función de validación adaptada de config_logic
 try:
     # Intenta importar relativamente desde el mismo paquete 'backend'
     from .config_logic import validar_credenciales as validar_credenciales_real
 
-    print("INFO (login_logic): Usando 'validar_credenciales' desde .config_logic")
+    logger.info("Usando 'validar_credenciales' desde .config_logic")
 except ImportError:
     # Fallback si falla la relativa (ej. al ejecutar standalone o estructura diferente)
     try:
         from config_logic import validar_credenciales as validar_credenciales_real
 
-        print(
-            "WARN (login_logic): Usando importación directa de config_logic (fallback)."
-        )
+        logger.warning("Usando importación directa de config_logic (fallback).")
     except ImportError:
         # Último recurso: definir un fallback dummy si todo falla
-        print(
-            "ERROR CRITICO (login_logic): No se encontró 'validar_credenciales' en config_logic.",
-            file=sys.stderr,
+        logger.critical(
+            "No se encontró 'validar_credenciales' en config_logic."
         )
 
         def validar_credenciales_real(username, password):
-            print(
-                "ERROR (login_logic): USANDO VALIDACIÓN DUMMY (FALLBACK FINAL)",
-                file=sys.stderr,
-            )
+            logger.error("USANDO VALIDACIÓN DUMMY (FALLBACK FINAL)")
             return False  # Fallback muy básico que siempre falla
 
 
@@ -39,7 +38,7 @@ def verificar_login(username, password):
     Retorna True si son válidas, False en caso contrario o si hay error.
     """
     if not username or not password:
-        print("WARN (login_logic): Intento de login con usuario o contraseña vacíos.")
+        logger.warning("Intento de login con usuario o contraseña vacíos.")
         return False
 
     try:
@@ -49,10 +48,7 @@ def verificar_login(username, password):
         return es_valido
     except Exception as e_val:
         # Captura cualquier error inesperado durante la validación
-        print(
-            f"ERROR (login_logic): Excepción durante la llamada a validación: {e_val}",
-            file=sys.stderr,
-        )
+        logger.error(f"Excepción durante la llamada a validación: {e_val}")
         traceback.print_exc()
         return False  # Considerar el login como fallido si hay un error interno
 
