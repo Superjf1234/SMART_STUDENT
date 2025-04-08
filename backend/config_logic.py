@@ -382,6 +382,44 @@ def verificar_api_gemini():
         return False
 
 
+# --- Funciones para listar y describir funcionalidades ---
+def listar_funcionalidades():
+    """Lista las funcionalidades disponibles en español."""
+    funcionalidades = [
+        "Cargar variables de entorno",
+        "Configurar API Gemini",
+        "Estructura de Cursos y PDFs",
+        "Configurar Hashing de Contraseñas",
+        "Validar credenciales de usuario",
+        "Manejar PDFs",
+        "Llamar a la API de Gemini",
+        "Verificar conexión con API Gemini",
+    ]
+    return funcionalidades
+
+
+def describir_funcionalidad(funcionalidad):
+    """Describe cada funcionalidad en español."""
+    descripciones = {
+        "Cargar variables de entorno": "Carga las variables de entorno desde el archivo .env.",
+        "Configurar API Gemini": "Configura la API de Gemini con la clave y URL necesarias.",
+        "Estructura de Cursos y PDFs": "Define la estructura de cursos y los archivos PDF asociados.",
+        "Configurar Hashing de Contraseñas": "Configura el hashing de contraseñas usando bcrypt.",
+        "Validar credenciales de usuario": "Valida las credenciales del usuario usando hashes seguros.",
+        "Manejar PDFs": "Maneja la extracción de texto de archivos PDF.",
+        "Llamar a la API de Gemini": "Llama a la API de Gemini para generar contenido.",
+        "Verificar conexión con API Gemini": "Verifica si la API de Gemini está accesible.",
+    }
+    return descripciones.get(funcionalidad, "Funcionalidad no encontrada.")
+
+
+def obtener_funcionalidades():
+    """Obtiene la lista de funcionalidades y sus descripciones en español."""
+    funcionalidades = listar_funcionalidades()
+    descripciones = {func: describir_funcionalidad(func) for func in funcionalidades}
+    return descripciones
+
+
 # --- Puedes añadir aquí un bloque if __name__ == "__main__": para probar funciones ---
 if __name__ == "__main__":
     print("--- Ejecutando pruebas de config_logic.py ---")
@@ -429,5 +467,11 @@ if __name__ == "__main__":
         print(f"Resultado verificación API: {api_ok}")
     else:
         print("Saltando verificación API (API Key no configurada o es placeholder).")
+
+    # Prueba de funcionalidades
+    print("\nProbando funcionalidades:")
+    funcionalidades = obtener_funcionalidades()
+    for func, desc in funcionalidades.items():
+        print(f"{func}: {desc}")
 
     print("\n--- Pruebas finalizadas ---")
