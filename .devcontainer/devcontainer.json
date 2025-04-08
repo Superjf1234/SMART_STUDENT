@@ -1,0 +1,5 @@
+{
+  "tasks": {
+    "launch": "python -m reflex run"
+  }
+}

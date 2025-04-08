@@ -22,12 +22,14 @@ if not GEMINI_API_KEY:
         "ERROR CRITICO (config_logic): La variable de entorno GEMINI_API_KEY no está definida en el archivo .env",
         file=sys.stderr,
     )
-    # Considera lanzar un error si la API Key es esencial para iniciar
-    # raise ValueError("API Key de Gemini no encontrada en .env")
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"  # O la URL del modelo que prefieras
+GEMINI_API_URL = os.getenv("GEMINI_API_URL")
+if not GEMINI_API_URL:
+    print(
+        "ERROR CRITICO (config_logic): La variable de entorno GEMINI_API_URL no está definida en el archivo .env",
+        file=sys.stderr,
+    )
 
 # --- Estructura de Cursos y PDFs ---
-# Asegúrate de que los nombres de archivo PDF coincidan con los que pongas en assets/pdfs/...
 CURSOS = {
     "1ro Básico": {
         "Ciencias Naturales": "CNASM25E1B.pdf",
@@ -41,7 +43,6 @@ CURSOS = {
         "Historia": "HISSM25E2B.pdf",
         "Lenguaje y Literatura": "LYLSA25E2B.pdf",
     },
-    # ... (Completa con TODOS tus cursos y archivos) ...
     "8vo Básico": {
         "Ciencias Naturales": "CNASM25E8B.pdf",
         "Matemáticas": "MATSA25E8B.pdf",
@@ -77,45 +78,28 @@ CURSOS = {
 }
 
 # --- Configuración de Hashing de Contraseñas ---
-# Crear contexto de hashing (hacer esto una sola vez)
-# Usamos bcrypt, que es un estándar seguro. Necesita 'pip install bcrypt'
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # --- EJEMPLO de HASHES - ¡NO ALMACENAR ASÍ EN PRODUCCIÓN! ---
-# Estos hashes deberías generarlos una vez y almacenarlos de forma segura
-# (por ejemplo, en tu base de datos junto al usuario).
-# Para generar un hash: print(pwd_context.hash("tu_contraseña_plana"))
 usuarios_hashes_ejemplo = {
-    "estudiante": pwd_context.hash("clave123"),  # Genera un hash diferente cada vez
+    "estudiante": pwd_context.hash("clave123"),
     "profe": pwd_context.hash("segura456"),
     "felipe": pwd_context.hash("1234"),
-    # Añade aquí los usuarios y hashes que necesites para probar
 }
 print("INFO (config_logic): Hashes de ejemplo cargados (¡SOLO PARA DESARROLLO!)")
-# Reemplaza usuarios_hashes_ejemplo con tu método real de carga de usuarios/hashes
-
 
 # --- Función de Validación de Login (Adaptada) ---
 def validar_credenciales(username, password_plana):
-    """
-    Valida las credenciales del usuario usando hashes seguros.
-    ¡NECESITA un método seguro para cargar/buscar usuarios y hashes!
-    """
     print(f"DEBUG (config_logic): Validando credenciales para '{username}'...")
-    # --- ¡REEMPLAZAR ESTO con tu lógica real de búsqueda de usuarios/hashes! ---
     if username in usuarios_hashes_ejemplo:
         hash_almacenado = usuarios_hashes_ejemplo[username]
-        # --- Fin de lógica de ejemplo ---
-
         try:
-            # Verificar la contraseña plana contra el hash almacenado
             es_valido = pwd_context.verify(password_plana, hash_almacenado)
             print(
                 f"DEBUG (config_logic): Resultado de verificación para '{username}': {es_valido}"
             )
             return es_valido
         except Exception as e_hash:
-            # Errores posibles: hash inválido, problema con passlib/bcrypt
             print(
                 f"ERROR (config_logic): Verificando hash para '{username}' - {e_hash}",
                 file=sys.stderr,
@@ -128,35 +112,19 @@ def validar_credenciales(username, password_plana):
         )
         return False
 
-
 # --- Funciones de Manejo de PDFs (Adaptadas) ---
 def obtener_directorio_pdf(curso):
-    """
-    Obtiene el directorio relativo donde se esperan los PDFs de un curso.
-    Asume que los PDFs están en 'assets/pdfs/nombre_curso_normalizado/'.
-    """
-    # Normalizar nombre del curso para usarlo como nombre de carpeta
-    # Reemplaza espacios, quita caracteres especiales excepto guiones bajos/altos
     nivel_normalizado = "".join(c if c.isalnum() else "_" for c in curso.lower()).strip(
         "_"
     )
-    # Ruta relativa desde la raíz del proyecto Reflex
     base_path = "assets/pdfs"
     dir_path = os.path.join(base_path, nivel_normalizado)
     print(
         f"DEBUG (config_logic): Ruta PDF calculada para curso '{curso}': '{dir_path}'"
     )
-    # Podrías añadir una verificación si el directorio existe aquí si es necesario
-    # if not os.path.isdir(dir_path):
-    #     print(f"WARN (config_logic): El directorio '{dir_path}' no existe.")
     return dir_path
 
-
 def extraer_texto_pdf(curso, archivo):
-    """
-    Extrae el texto de un archivo PDF ubicado en la ruta relativa del proyecto.
-    Lanza excepciones específicas en caso de error.
-    """
     directorio = obtener_directorio_pdf(curso)
     ruta_completa = os.path.join(directorio, archivo)
 
@@ -182,27 +150,19 @@ def extraer_texto_pdf(curso, archivo):
                     if texto_pagina:
                         texto += texto_pagina + "\n"
                 except Exception as e_page:
-                    # Advertir sobre página específica pero continuar
                     print(
                         f"WARN (config_logic): Error al extraer texto de página {i+1}/{num_paginas} de '{archivo}': {e_page}"
                     )
-                    texto += "[Error en página]\n"  # Añadir marcador
+                    texto += "[Error en página]\n"
 
             palabras = texto.split()
             num_palabras = len(palabras)
-            # Limitar a ~50k caracteres para evitar prompts excesivamente largos (ajustar según necesidad)
             max_chars = 50000
             if len(texto) > max_chars:
                 print(
                     f"INFO (config_logic): Texto truncado a {max_chars} caracteres (original: {len(texto)}, {num_palabras} palabras)"
                 )
                 texto = texto[:max_chars]
-            # limitar palabras también
-            # if num_palabras > 10000:
-            #     print(
-            #         f"INFO: Texto truncado a 10000 palabras (original: {num_palabras})"
-            #     )
-            #     texto = " ".join(palabras[:10000])
 
             print(
                 f"INFO (config_logic): Texto extraído de '{archivo}' (longitud: {len(texto)} chars, aprox: {num_palabras} palabras)"
@@ -210,30 +170,22 @@ def extraer_texto_pdf(curso, archivo):
             return texto.strip()
 
     except FileNotFoundError as e_fnf:
-        # Relanzar FileNotFoundError específicamente
         raise e_fnf
     except Exception as e:
         error_msg = f"No se pudo leer o procesar el PDF '{archivo}': {e}"
         print(f"ERROR (config_logic): {error_msg}", file=sys.stderr)
         traceback.print_exc()
-        # Lanzar una excepción genérica de IO o una personalizada
         raise IOError(error_msg) from e
 
-
 # --- Funciones de API Gemini (Adaptadas, sin Tkinter) ---
-# NOTA: Considera mover estas a api_logic.py y usar la librería google-generativeai
-
-
 def llamar_api_gemini(prompt):
-    """Llama a la API de Gemini para generar contenido. Devuelve texto o mensaje de error."""
     if not GEMINI_API_KEY:
         error_msg = "Error: API Key de Gemini no configurada."
         print(f"ERROR (config_logic): {error_msg}", file=sys.stderr)
-        return error_msg  # Devolver mensaje de error
+        return error_msg
 
     headers = {"Content-Type": "application/json"}
-    # Limitar longitud del prompt (ajustar según modelo y necesidad)
-    max_prompt_len = 30000  # Caracteres, no tokens necesariamente
+    max_prompt_len = 30000
     if len(prompt) > max_prompt_len:
         print(
             f"WARN (config_logic): Prompt truncado a {max_prompt_len} caracteres (original: {len(prompt)})"
@@ -247,14 +199,12 @@ def llamar_api_gemini(prompt):
     )
 
     try:
-        # Timeout más largo puede ser necesario para generación compleja
         response = requests.post(
             api_url_completa, headers=headers, json=data, timeout=180
         )
-        response.raise_for_status()  # Lanza HTTPError para respuestas 4xx/5xx
+        response.raise_for_status()
         respuesta_json = response.json()
 
-        # Validaciones robustas de la respuesta
         if (
             not isinstance(respuesta_json.get("candidates"), list)
             or not respuesta_json["candidates"]
@@ -264,12 +214,11 @@ def llamar_api_gemini(prompt):
                 f"ERROR API (config_logic): {error_msg} Respuesta: {respuesta_json}",
                 file=sys.stderr,
             )
-            return error_msg  # Devolver mensaje de error
+            return error_msg
 
         candidate = respuesta_json["candidates"][0]
         finish_reason = candidate.get("finishReason", "UNKNOWN")
 
-        # Comprobar si el contenido fue bloqueado
         if finish_reason != "STOP":
             print(
                 f"WARN API (config_logic): Finish Reason no fue STOP: {finish_reason}"
@@ -278,10 +227,8 @@ def llamar_api_gemini(prompt):
                 safety_ratings = candidate.get("safetyRatings", [])
                 error_msg = f"Error: Contenido bloqueado por seguridad (Razón: {finish_reason}). Ratings: {safety_ratings}"
                 print(f"ERROR API (config_logic): {error_msg}", file=sys.stderr)
-                return error_msg  # Devolver mensaje de error
-            # Podrías manejar otros finish_reason aquí (MAX_TOKENS, etc.)
+                return error_msg
 
-        # Extraer texto de las partes
         content = candidate.get("content", {})
         parts = content.get("parts", [])
         if not isinstance(parts, list) or not parts:
@@ -290,7 +237,7 @@ def llamar_api_gemini(prompt):
                 f"ERROR API (config_logic): {error_msg} Candidate: {candidate}",
                 file=sys.stderr,
             )
-            return error_msg  # Devolver mensaje de error
+            return error_msg
 
         texto_generado = ""
         for part in parts:
@@ -298,41 +245,37 @@ def llamar_api_gemini(prompt):
                 texto_generado += part["text"]
 
         if not texto_generado:
-            # Esto puede pasar si la API devuelve partes vacías o sin texto
             print(
                 f"WARN API (config_logic): No se encontró texto útil en la respuesta (Finish Reason: {finish_reason}). Parts: {parts}",
                 file=sys.stderr,
             )
-            # Podrías devolver un error o un string vacío dependiendo de cómo lo manejes
             return "Advertencia: La API no devolvió texto útil."
 
         print("INFO (config_logic): Texto recibido de la API Gemini.")
-        return texto_generado  # Devolver texto generado
+        return texto_generado
 
     except requests.exceptions.Timeout:
         error_msg = "Error: Timeout al conectar con la API de Gemini."
         print(f"ERROR API (config_logic): {error_msg}", file=sys.stderr)
-        return error_msg  # Devolver mensaje de error
+        return error_msg
     except requests.exceptions.RequestException as e:
         error_msg = f"Error de conexión con la API de Gemini: {e}"
         print(f"ERROR API (config_logic): {error_msg}", file=sys.stderr)
-        return error_msg  # Devolver mensaje de error
+        return error_msg
     except KeyError as e_key:
         error_msg = f"Error al procesar la respuesta de la API (Falta clave: {e_key})."
         print(
             f"ERROR API (config_logic): {error_msg} Respuesta: {response.text[:500]}...",
             file=sys.stderr,
         )
-        return error_msg  # Devolver mensaje de error
+        return error_msg
     except Exception as e_gen:
         error_msg = f"Ocurrió un error inesperado al llamar a la API: {e_gen}"
         print(f"ERROR API (config_logic): {error_msg}", file=sys.stderr)
         traceback.print_exc()
-        return error_msg  # Devolver mensaje de error
-
+        return error_msg
 
 def verificar_api_gemini():
-    """Verifica si la API de Gemini está accesible. Devuelve True/False."""
     if not GEMINI_API_KEY:
         print(
             "ERROR (config_logic): No se puede verificar API, key no configurada.",
@@ -346,11 +289,10 @@ def verificar_api_gemini():
             f"{GEMINI_API_URL}?key={GEMINI_API_KEY}",
             headers={"Content-Type": "application/json"},
             json={"contents": [{"parts": [{"text": "Verificación rápida"}]}]},
-            timeout=20,  # Timeout corto para verificación
+            timeout=20,
         )
-        response.raise_for_status()  # Chequea errores HTTP
+        response.raise_for_status()
 
-        # Una verificación simple es suficiente, no necesitamos validar el contenido exacto aquí
         if response.status_code == 200:
             print("INFO (config_logic): Verificación de API Gemini exitosa (HTTP 200).")
             return True
@@ -359,7 +301,7 @@ def verificar_api_gemini():
                 f"WARN (config_logic): Verificación API devolvió status {response.status_code} pero sin error HTTP.",
                 file=sys.stderr,
             )
-            return False  # Considerar false si no es 200 OK
+            return False
 
     except requests.exceptions.Timeout:
         print(
@@ -381,12 +323,9 @@ def verificar_api_gemini():
         traceback.print_exc()
         return False
 
-
-# --- Puedes añadir aquí un bloque if __name__ == "__main__": para probar funciones ---
 if __name__ == "__main__":
     print("--- Ejecutando pruebas de config_logic.py ---")
 
-    # Prueba de validación (cambia usuarios/contraseñas para probar)
     print("\nProbando validación:")
     user_test = "felipe"
     pass_test_ok = "1234"
@@ -401,30 +340,13 @@ if __name__ == "__main__":
         f"Validando usuario_inexistente/pass: {validar_credenciales('usuario_inexistente', 'pass')}"
     )
 
-    # Prueba de ruta PDF
     print("\nProbando ruta PDF:")
     print(f"Ruta para 1ro Básico: {obtener_directorio_pdf('1ro Básico')}")
-    # Crea el directorio y un archivo dummy si quieres probar extraer_texto_pdf
-    # ej_curso = "1ro Básico"
-    # ej_libro_nombre = "Matemáticas"
-    # ej_archivo = CURSOS.get(ej_curso, {}).get(ej_libro_nombre)
-    # if ej_archivo:
-    #     pdf_dir = obtener_directorio_pdf(ej_curso)
-    #     os.makedirs(pdf_dir, exist_ok=True)
-    #     dummy_pdf_path = os.path.join(pdf_dir, ej_archivo)
-    #     # Crear un PDF dummy requeriría fpdf u otra lib, omitido por simplicidad
-    #     # print(f"Intentando extraer de (debe existir y ser PDF válido): {dummy_pdf_path}")
-    #     # try:
-    #     #     texto = extraer_texto_pdf(ej_curso, ej_archivo)
-    #     #     print(f"Texto extraído (dummy): {texto[:100]}...")
-    #     # except Exception as e:
-    #     #     print(f"Error extracción (esperado si es dummy): {e}")
 
-    # Prueba verificación API (requiere conexión y API Key válida)
     print("\nProbando verificación API:")
     if (
         GEMINI_API_KEY and "TU_API_KEY" not in GEMINI_API_KEY
-    ):  # Evitar si no se puso key real
+    ):
         api_ok = verificar_api_gemini()
         print(f"Resultado verificación API: {api_ok}")
     else:
