@@ -171,7 +171,7 @@ def generar_mapa_logica(curso, libro, tema_usuario, selected_orientation="LR"):
 
     # ELIMINADO: Verificación de MERMAID_AVAILABLE
 
-    if not curso or not libro or not tema_usuario:
+    if not curso, not libro, not tema_usuario:
         resultado["message"] = "Curso, libro y tema son requeridos."
         resultado["status"] = "ERROR_INPUT"
         return resultado
