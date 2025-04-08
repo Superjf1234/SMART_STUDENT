@@ -122,75 +122,101 @@ class AppState(rx.State):
     # Estos handlers necesitarán ser implementados para llamar a la lógica del backend
     # y actualizar el estado (ej. resumen_content, mapa_mermaid_code, etc.)
     async def generate_summary(self):
-        # Ejemplo: Llamar a resumen_logic, actualizar resumen_content/puntos_content
-        # self.is_generating_resumen = True
-        # result = resumen_logic.generar_resumen_logica(...)
-        # if result['status'] == 'EXITO':
-        #      self.resumen_content = result['resumen']
-        #      self.puntos_content = result['puntos']
-        # else:
-        #      self.error_message_ui = result['message']
-        # self.is_generating_resumen = False
-        pass
+        self.is_generating_resumen = True
+        try:
+            result = await resumen_logic.generar_resumen_logica(
+                self.selected_curso, self.selected_libro, self.selected_tema, self.include_puntos
+            )
+            if result['status'] == 'EXITO':
+                self.resumen_content = result['resumen']
+                self.puntos_content = result['puntos']
+            else:
+                self.error_message_ui = result['message']
+        except Exception as e:
+            self.error_message_ui = f"Error al generar resumen: {e}"
+        self.is_generating_resumen = False
 
     async def download_summary_pdf(self):
-        # Ejemplo: Llamar a resumen_logic.generar_resumen_pdf_bytes
-        # y usar rx.download para enviar los bytes al navegador
-        pass
+        try:
+            pdf_bytes = await resumen_logic.generar_resumen_pdf_bytes(
+                self.selected_curso, self.selected_libro, self.selected_tema, self.include_puntos
+            )
+            await rx.download(pdf_bytes, "resumen.pdf")
+        except Exception as e:
+            self.error_message_ui = f"Error al descargar resumen PDF: {e}"
 
     async def generate_map(self):
-        # Ejemplo: Llamar a map_logic, actualizar mapa_mermaid_code
-        # self.is_generating_mapa = True
-        # result = map_logic.generar_mapa_logica(...)
-        # if result['status'] == 'EXITO':
-        #     self.mapa_mermaid_code = result['mermaid_code']
-        # else:
-        #     self.error_message_ui = result['message']
-        # self.is_generating_mapa = False
-        pass
+        self.is_generating_mapa = True
+        try:
+            result = await map_logic.generar_mapa_logica(
+                self.selected_curso, self.selected_libro, self.selected_tema, self.mapa_orientation
+            )
+            if result['status'] == 'EXITO':
+                self.mapa_mermaid_code = result['mermaid_code']
+            else:
+                self.error_message_ui = result['message']
+        except Exception as e:
+            self.error_message_ui = f"Error al generar mapa: {e}"
+        self.is_generating_mapa = False
 
     async def start_evaluation(self):
-        # Ejemplo: Llamar a eval_logic.generar_evaluacion_logica
-        # actualizar eval_preguntas, resetear estado de evaluación
-        # self.is_generating_eval = True
-        # result = eval_logic.generar_evaluacion_logica(...)
-        # if result['status'] == 'EXITO':
-        #      self.eval_preguntas = result['preguntas']
-        #      self.eval_current_idx = 0
-        #      self.eval_user_answers = {}
-        #      self.eval_score = None
-        #      self.is_eval_active = True
-        #      self.is_reviewing_eval = False
-        # else:
-        #      self.error_message_ui = result['message']
-        # self.is_generating_eval = False
-        pass
+        self.is_generating_eval = True
+        try:
+            result = await eval_logic.generar_evaluacion_logica(
+                self.selected_curso, self.selected_libro, self.selected_tema
+            )
+            if result['status'] == 'EXITO':
+                self.eval_preguntas = result['preguntas']
+                self.eval_current_idx = 0
+                self.eval_user_answers = {}
+                self.eval_score = None
+                self.is_eval_active = True
+                self.is_reviewing_eval = False
+            else:
+                self.error_message_ui = result['message']
+        except Exception as e:
+            self.error_message_ui = f"Error al iniciar evaluación: {e}"
+        self.is_generating_eval = False
 
     def handle_answer_change(self, index: int, answer: typing.Union[str, list[str]]):
-        # Actualizar self.eval_user_answers[index] = answer
-        pass
+        self.eval_user_answers[index] = answer
 
     def next_question(self):
-        # Incrementar self.eval_current_idx si no es la última pregunta
-        pass
+        if self.eval_current_idx < len(self.eval_preguntas) - 1:
+            self.eval_current_idx += 1
 
     async def submit_evaluation(self):
-        # Calcular resultado con eval_logic.calcular_resultado_logica
-        # Guardar resultado con eval_logic.guardar_resultado_evaluacion
-        # Actualizar eval_score, eval_correct_count, is_eval_active=False, is_reviewing_eval=True
-        pass
+        try:
+            result = await eval_logic.calcular_resultado_logica(
+                self.eval_preguntas, self.eval_user_answers
+            )
+            if result['status'] == 'EXITO':
+                self.eval_score = result['score']
+                self.eval_correct_count = result['correct_count']
+                self.eval_total_q = len(self.eval_preguntas)
+                self.is_eval_active = False
+                self.is_reviewing_eval = True
+                await eval_logic.guardar_resultado_evaluacion(
+                    self.logged_in_username, self.selected_curso, self.selected_libro, self.selected_tema, self.eval_score
+                )
+            else:
+                self.error_message_ui = result['message']
+        except Exception as e:
+            self.error_message_ui = f"Error al enviar evaluación: {e}"
 
     async def load_stats(self):
-        # Llamar a db_logic.obtener_historial y actualizar self.stats_history
-        # self.is_loading_stats = True
-        # self.stats_history = db_logic.obtener_historial(self.logged_in_username)
-        # self.is_loading_stats = False
-        pass
+        self.is_loading_stats = True
+        try:
+            self.stats_history = await db_logic.obtener_historial(self.logged_in_username)
+        except Exception as e:
+            self.error_message_ui = f"Error al cargar estadísticas: {e}"
+        self.is_loading_stats = False
 
     def start_repaso(self, history_entry: dict):
-        # Lógica para iniciar un repaso basado en una entrada del historial
-        # Podría re-seleccionar el curso/libro/tema y quizás generar una nueva eval
-        pass
+        self.selected_curso = history_entry.get("curso", "")
+        self.selected_libro = history_entry.get("libro", "")
+        self.selected_tema = history_entry.get("tema", "")
+        # Podrías agregar lógica adicional para iniciar un repaso basado en la entrada del historial
 
 
 # --- Fin AppState ---
