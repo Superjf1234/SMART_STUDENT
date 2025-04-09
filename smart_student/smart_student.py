@@ -464,4 +464,10 @@ def index() -> rx.Component:
 # --- Crear e Inicializar la App ---
 app = rx.App()
 app.add_page(index, route="/")
-# app.compile() # No es necesario llamar compile() explícitamente aquí, 'reflex run' lo hace
+app.compile()
+
+# Establecer el título de la página
+app.title = "Smart Student | Piensa, Crea y Destaca"
+
+# Establecer el favicon de la página
+app.favicon = "favicon (3).ico"
