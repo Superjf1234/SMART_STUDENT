@@ -337,7 +337,7 @@ def resumen_tab_content() -> rx.Component:
             ),
              rx.cond(
                 AppState.is_generating_resumen,
-                 rx.circular_progress(is_indeterminate=True),
+                 rx.spinner(is_indeterminate=True),
             ),
              rx.cond(
                 AppState.resumen_content,
