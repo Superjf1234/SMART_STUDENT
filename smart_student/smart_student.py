@@ -150,35 +150,50 @@ class AppState(rx.State):
         pass
 
     async def start_evaluation(self):
-        # Ejemplo: Llamar a eval_logic.generar_evaluacion_logica
-        # actualizar eval_preguntas, resetear estado de evaluación
-        # self.is_generating_eval = True
-        # result = eval_logic.generar_evaluacion_logica(...)
-        # if result['status'] == 'EXITO':
-        #      self.eval_preguntas = result['preguntas']
-        #      self.eval_current_idx = 0
-        #      self.eval_user_answers = {}
-        #      self.eval_score = None
-        #      self.is_eval_active = True
-        #      self.is_reviewing_eval = False
-        # else:
-        #      self.error_message_ui = result['message']
-        # self.is_generating_eval = False
-        pass
+        self.is_generating_eval = True
+        result = eval_logic.generar_evaluacion_logica(
+            self.selected_curso, self.selected_libro, self.selected_tema
+        )
+        if result["status"] == "EXITO":
+            self.eval_preguntas = result["preguntas"]
+            self.eval_current_idx = 0
+            self.eval_user_answers = {}
+            self.eval_score = None
+            self.is_eval_active = True
+            self.is_reviewing_eval = False
+        else:
+            self.error_message_ui = result["message"]
+        self.is_generating_eval = False
 
     def handle_answer_change(self, index: int, answer: typing.Union[str, list[str]]):
-        # Actualizar self.eval_user_answers[index] = answer
-        pass
+        if isinstance(answer, list):
+            self.eval_user_answers[index] = set(answer)
+        else:
+            self.eval_user_answers[index] = answer
 
     def next_question(self):
-        # Incrementar self.eval_current_idx si no es la última pregunta
-        pass
+        if self.eval_current_idx < len(self.eval_preguntas) - 1:
+            self.eval_current_idx += 1
 
     async def submit_evaluation(self):
-        # Calcular resultado con eval_logic.calcular_resultado_logica
-        # Guardar resultado con eval_logic.guardar_resultado_evaluacion
-        # Actualizar eval_score, eval_correct_count, is_eval_active=False, is_reviewing_eval=True
-        pass
+        result = eval_logic.calcular_resultado_logica(
+            self.eval_preguntas, self.eval_user_answers
+        )
+        if result:
+            self.eval_score = result["score"]
+            self.eval_correct_count = result["correct_count"]
+            self.eval_total_q = result["total_questions"]
+            eval_logic.guardar_resultado_evaluacion(
+                self.logged_in_username,
+                self.selected_curso,
+                self.selected_libro,
+                self.selected_tema,
+                self.eval_score,
+            )
+            self.is_eval_active = False
+            self.is_reviewing_eval = True
+        else:
+            self.error_message_ui = "Error al calcular el resultado de la evaluación."
 
     async def load_stats(self):
         # Llamar a db_logic.obtener_historial y actualizar self.stats_history
@@ -368,10 +383,118 @@ def mapa_tab_content() -> rx.Component:
 
 
 def evaluacion_tab_content() -> rx.Component:
-    # TODO: Selects, Input tema, Botón Iniciar Evaluación,
-    # UI para mostrar pregunta actual (texto, opciones), Inputs para respuesta (radio/checkbox),
-    # Botones Anterior/Siguiente/Finalizar, Muestra de puntaje/revisión.
-    return rx.box(rx.text("Contenido Evaluación (Pendiente)"), padding="1em")
+    return rx.box(
+        rx.vstack(
+            rx.heading("Evaluación", size="5"),
+            rx.select(
+                AppState.cursos_list,
+                placeholder="Selecciona Curso...",
+                value=AppState.selected_curso,
+                on_change=AppState.set_selected_curso,
+            ),
+            rx.cond(
+                AppState.selected_curso,
+                rx.select(
+                    AppState.libros_para_curso,
+                    placeholder="Selecciona Libro...",
+                    value=AppState.selected_libro,
+                    on_change=AppState.set_selected_libro,
+                ),
+            ),
+            rx.input(
+                placeholder="Ingresa Tema Específico",
+                value=AppState.selected_tema,
+                on_change=AppState.set_selected_tema,
+            ),
+            rx.button(
+                "Iniciar Evaluación",
+                on_click=AppState.start_evaluation,
+                is_loading=AppState.is_generating_eval,
+            ),
+            rx.cond(
+                AppState.is_generating_eval,
+                rx.circular_progress(is_indeterminate=True),
+            ),
+            rx.cond(
+                AppState.is_eval_active,
+                rx.box(
+                    rx.heading(
+                        f"Pregunta {AppState.eval_current_idx + 1} de {len(AppState.eval_preguntas)}",
+                        size="4",
+                    ),
+                    rx.text(
+                        AppState.eval_preguntas[AppState.eval_current_idx]["pregunta"],
+                        white_space="pre-wrap",
+                    ),
+                    rx.cond(
+                        AppState.eval_preguntas[AppState.eval_current_idx]["tipo"]
+                        == "alternativas",
+                        rx.radio_group(
+                            options=[
+                                alt["texto"]
+                                for alt in AppState.eval_preguntas[
+                                    AppState.eval_current_idx
+                                ]["alternativas"]
+                            ],
+                            on_change=lambda val: AppState.handle_answer_change(
+                                AppState.eval_current_idx, val
+                            ),
+                        ),
+                    ),
+                    rx.cond(
+                        AppState.eval_preguntas[AppState.eval_current_idx]["tipo"]
+                        == "seleccion_multiple",
+                        rx.checkbox_group(
+                            options=[
+                                alt["texto"]
+                                for alt in AppState.eval_preguntas[
+                                    AppState.eval_current_idx
+                                ]["alternativas"]
+                            ],
+                            on_change=lambda val: AppState.handle_answer_change(
+                                AppState.eval_current_idx, val
+                            ),
+                        ),
+                    ),
+                    rx.button(
+                        "Siguiente",
+                        on_click=AppState.next_question,
+                        is_disabled=AppState.eval_current_idx
+                        >= len(AppState.eval_preguntas) - 1,
+                    ),
+                    rx.button(
+                        "Finalizar Evaluación",
+                        on_click=AppState.submit_evaluation,
+                        is_disabled=AppState.eval_current_idx
+                        < len(AppState.eval_preguntas) - 1,
+                    ),
+                ),
+            ),
+            rx.cond(
+                AppState.is_reviewing_eval,
+                rx.box(
+                    rx.heading("Resultados de la Evaluación", size="4"),
+                    rx.text(f"Nota: {AppState.eval_score}"),
+                    rx.text(
+                        f"Correctas: {AppState.eval_correct_count} de {AppState.eval_total_q}"
+                    ),
+                    rx.button("Reiniciar Evaluación", on_click=AppState.start_evaluation),
+                ),
+            ),
+            rx.cond(
+                AppState.error_message_ui,
+                rx.callout(
+                    AppState.error_message_ui,
+                    icon="triangle_alert",
+                    color_scheme="red",
+                ),
+            ),
+            spacing="3",
+            align_items="start",
+        ),
+        padding="1em",
+        width="100%",
+    )
 
 
 def estadisticas_tab_content() -> rx.Component:
