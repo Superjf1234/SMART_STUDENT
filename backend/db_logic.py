@@ -6,12 +6,7 @@ import traceback
 
 DATABASE_FILE = "student_stats.db"
 
-# ELIMINADO: logged_in_user = None
-# ELIMINADO: def set_current_user(username): ...
-
-
 def get_db_connection():
-    # ... (sin cambios) ...
     try:
         conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
         conn.row_factory = sqlite3.Row
@@ -24,9 +19,7 @@ def get_db_connection():
         traceback.print_exc()
         return None
 
-
 def inicializar_db():
-    # ... (sin cambios, pero asegúrate que se llame al inicio de la app Reflex) ...
     create_table_query = """
         CREATE TABLE IF NOT EXISTS evaluacion_historial (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,11 +47,8 @@ def inicializar_db():
         finally:
             conn.close()
 
-
-# --- MODIFICADA ---
 def guardar_evaluacion(username, curso, libro, tema, nota):
-    """Guarda evaluación para un usuario específico."""
-    if not username:  # Verificar que se pasó el username
+    if not username:
         print(
             "ERROR (db_logic): Intento de guardar evaluación sin username.",
             file=sys.stderr,
@@ -94,7 +84,7 @@ def guardar_evaluacion(username, curso, libro, tema, nota):
                         tema,
                         fecha_actual,
                         nota_float,
-                    ),  # Usar username parámetro
+                    ),
                 )
                 print(
                     f"INFO (db_logic): Evaluación guardada para '{username}' (Tema: {tema}, Nota: {nota_float})."
@@ -116,16 +106,13 @@ def guardar_evaluacion(username, curso, libro, tema, nota):
             conn.close()
     return success
 
-
-# --- MODIFICADA ---
 def obtener_historial(username):
-    """Obtiene historial para un usuario específico."""
     if not username:
         print(
             "ERROR (db_logic): Intento de obtener historial sin username.",
             file=sys.stderr,
         )
-        return []  # Retornar lista vacía si no hay usuario
+        return []
 
     select_query = """
         SELECT id, curso, libro, tema, fecha, nota
@@ -139,11 +126,11 @@ def obtener_historial(username):
         try:
             with conn:
                 cursor = conn.cursor()
-                cursor.execute(select_query, (username,))  # Usar username parámetro
+                cursor.execute(select_query, (username,))
                 rows = cursor.fetchall()
                 historial = [
                     dict(row) for row in rows
-                ]  # Convertir a dict para fácil uso en Reflex
+                ]
                 print(
                     f"INFO (db_logic): Obtenidas {len(historial)} entradas de historial para '{username}'."
                 )
@@ -163,13 +150,6 @@ def obtener_historial(username):
             conn.close()
     return historial
 
-
-# --- Inicialización ---
-# Es buena idea llamar a inicializar_db() una vez cuando la aplicación Reflex arranque.
-# Puedes hacerlo en tu archivo principal de Reflex (tu_proyecto_web.py) antes de definir la App,
-# o podrías tener una función de setup en db_logic.py que sea llamada.
-# Por ahora, nos aseguramos que la función exista.
-# Si ejecutas este archivo directamente para probar, inicializará:
 if __name__ == "__main__":
     print("--- Ejecutando pruebas de db_logic.py ---")
     inicializar_db()
