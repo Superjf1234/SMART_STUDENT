@@ -324,16 +324,15 @@ class EvaluationState(rx.State):
         
         try:
             eval_logic = __import__("backend.eval_logic", fromlist=["eval_logic"])
-            if not hasattr(eval_logic, "generar_evaluacion"):
+            if not hasattr(eval_logic, "generar_evaluacion_funcional"):
                 raise AttributeError("El módulo de evaluación no está correctamente configurado.")
                 
-            content = self.resumen_content + (
-                "\n\nPuntos:\n" + self.puntos_content
-                if self.include_puntos and self.puntos_content
-                else ""
+            result = eval_logic.generar_evaluacion_funcional(
+                self.selected_curso,
+                self.selected_libro,
+                self.selected_tema,
+                "opcion_multiple"  # Tipo de evaluación por defecto
             )
-            
-            result = eval_logic.generar_evaluacion(content)
             
             if isinstance(result, dict) and result.get("status") == "EXITO":
                 preguntas = result.get("preguntas")
@@ -670,4 +669,3 @@ def evaluacion_tab():
         p="2em",
         spacing="4",
     )
-

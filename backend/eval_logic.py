@@ -228,7 +228,7 @@ def generar_evaluacion_logica(curso, libro, tema):
     """
     print(f"DEBUG: Iniciando evaluación para Curso={curso}, Libro={libro}, Tema={tema}")
     resultado = {"status": "ERROR", "preguntas": None, "message": "Error desconocido"}
-    if not curso or not libro or not tema:
+    if not curso, libro, or tema:
         print("DEBUG: Faltan parámetros obligatorios (curso, libro, tema).")
         resultado["status"] = "ERROR_INPUT"
         resultado["message"] = "Curso, libro y tema son requeridos."
