@@ -1,35 +1,29 @@
 # backend/resumen_logic.py
 # Lógica para generar resúmenes y puntos clave, adaptada para Reflex (sin Tkinter).
 
-import os
-import traceback
-import sys
-
 try:
-    # Importar FPDF para generar PDF. Asegúrate: pip install fpdf
-    from fpdf import FPDF
-
-    FPDF_AVAILABLE = True
-except ImportError:
-    print(
-        "ERROR CRITICO (resumen_logic): Falta la librería 'fpdf'. Los PDF no se podrán generar.",
-        file=sys.stderr,
-    )
-    # Puedes definir FPDF como None para manejarlo, o dejar que falle si es esencial.
-    FPDF_AVAILABLE = False
-    FPDF = None  # Para evitar errores si se intenta usar
-
-# Importar desde los módulos de backend adaptados
-try:
-    # Asume que config_logic está en el mismo paquete (backend)
+    # Intenta importar relativamente desde el mismo paquete 'backend'
     from . import config_logic
+    print("INFO (resumen_logic): Usando import relativo para config_logic")
 except ImportError:
-    # Fallback si se ejecuta standalone
     print(
         "WARN (resumen_logic): Ejecutando en modo standalone o error import relativo. Usando imports directos."
     )
     import config_logic
 
+import sys
+import os
+import traceback
+from typing import Optional
+
+# Verificar si FPDF está disponible
+try:
+    from fpdf import FPDF
+    FPDF_AVAILABLE = True
+    print("INFO (resumen_logic): FPDF disponible para generar PDFs.")
+except ImportError:
+    FPDF_AVAILABLE = False
+    print("WARN (resumen_logic): FPDF no disponible. Se usará fallback HTML para reportes.")
 
 def formatear_puntos(puntos_texto):
     """Formatea puntos clave: numera, limpia intros/asteriscos, limita palabras."""
@@ -113,11 +107,29 @@ def formatear_puntos(puntos_texto):
 
 def formatear_resumen(resumen_texto, tema_solicitado):
     """Formatea el resumen: elimina títulos/intros no deseados y asteriscos."""
-    # (Misma lógica de formateo que la versión anterior, revisada)
     if not resumen_texto or not isinstance(resumen_texto, str):
         return "No se generó un resumen o el formato es incorrecto."
 
+    # Definir términos relacionados y sinónimos comunes
+    tema_map = {
+        "sistema respiratorio": ["respiratorio", "respiración", "pulmones", "respirar", 
+                               "alvéolos", "bronquios", "tráquea", "ventilación"],
+        "sistema digestivo": ["digestivo", "digestión", "estómago", "intestino", 
+                            "alimentos", "digerir", "hígado", "páncreas"],
+        "sistema circulatorio": ["circulatorio", "circulación", "sangre", "corazón", 
+                               "venas", "arterias", "vasos sanguíneos"],
+        "algebra": ["algebra", "ecuación", "ecuaciones", "variable", "variables", 
+                   "expresión algebraica", "término", "términos", "incógnita", 
+                   "coeficiente", "polinomio", "factorizar", "resolver ecuaciones",
+                   "lenguaje algebraico", "operaciones algebraicas"],
+        "matematicas": ["matemática", "número", "números", "operación", "operaciones",
+                       "algebra", "geometría", "aritmética", "cálculo", "ecuación",
+                       "problema", "ejercicio", "resolver", "solución"],
+        # Agregar más mapeos según sea necesario
+    }
+
     resumen_limpio = resumen_texto.strip()
+    # Expandir lista de títulos/intros no deseados 
     unwanted_titles = [
         "** Resumen Extendido y Detallado del Texto **",
         f"Resumen Extenso y Detallado del Texto '{tema_solicitado}'",
@@ -126,6 +138,17 @@ def formatear_resumen(resumen_texto, tema_solicitado):
         "Resumen detallado:",
         "```markdown",
         "```",
+        "Okay, aquí tienes",
+        "Aquí tienes",
+        "Introducción",
+        "A continuación",
+        "Basado en el texto",
+        "El texto proporciona", 
+        # Estas son frases comunes que típicamente aparecen al inicio
+        "Veamos un resumen",
+        "Te proporciono",
+        "Este es un resumen",
+        "Con base en"
     ]
 
     lines = resumen_limpio.split("\n")
@@ -169,7 +192,28 @@ def formatear_resumen(resumen_texto, tema_solicitado):
             linea_final
         )  # Mantener saltos de línea originales entre párrafos limpios
 
-    return "\n".join(cleaned_lines).strip()
+    # Add verification for topic relevance
+    tema_lower = tema_solicitado.lower()
+    texto_final = "\n".join(cleaned_lines).strip()
+    texto_lower = texto_final.lower()
+    
+    # Buscar términos relacionados
+    es_relevante = False
+    for tema_clave, terminos in tema_map.items():
+        if any(term in tema_lower for term in [tema_clave]):
+            # Si el tema solicitado coincide con alguna clave, verificar sus términos
+            es_relevante = any(term in texto_lower for term in terminos)
+            if es_relevante:
+                break
+    
+    # Si no hay mapeo específico, usar el tema original
+    if not es_relevante:
+        es_relevante = tema_lower in texto_lower
+    
+    if not es_relevante:
+        texto_final = f"⚠️ ADVERTENCIA: El resumen generado podría no estar enfocado específicamente en '{tema_solicitado}'.\nSe recomienda regenerar el resumen o verificar que el texto fuente contenga información sobre este tema.\n\n{texto_final}"
+    
+    return texto_final
 
 
 def generar_resumen_logica(curso, libro, tema, gen_puntos):
@@ -187,6 +231,7 @@ def generar_resumen_logica(curso, libro, tema, gen_puntos):
         "message": "Error desconocido",
     }
 
+    # Corregir la sintaxis de la verificación
     if not curso or not libro or not tema:
         resultado["message"] = "Curso, libro y tema son requeridos."
         resultado["status"] = "ERROR_INPUT"
@@ -209,14 +254,97 @@ def generar_resumen_logica(curso, libro, tema, gen_puntos):
         )  # Puede lanzar FileNotFoundError, IOError
         print(f"INFO (resumen_logic): Texto extraído ({len(texto_pdf)} chars).")
 
-        # 2. Generar Resumen (API)
-        print("INFO (resumen_logic): Llamando API para resumen...")
+        # 2. Pre-procesar y buscar secciones relevantes
+        print(f"INFO (resumen_logic): Buscando secciones sobre '{tema}'...")
+        
+        # Dividir en secciones por títulos/subtítulos
+        secciones = []
+        seccion_actual = []
+        es_titulo = lambda line: (line.isupper() and len(line) > 10) or line.strip().endswith(':')
+        
+        def es_titulo_matematico(line: str) -> bool:
+            """Detecta títulos relacionados con matemáticas."""
+            line_lower = line.lower()
+            return (es_titulo(line) or 
+                    any(term in line_lower for term in [
+                        "unidad", "capítulo", "ejercicio", "ejemplo",
+                        "definición", "teorema", "propiedad", "algebra"
+                    ]))
+
+        for linea in texto_pdf.split('\n'):
+            linea_strip = linea.strip()
+            if es_titulo_matematico(linea_strip):
+                if seccion_actual:
+                    secciones.append('\n'.join(seccion_actual))
+                seccion_actual = [linea]
+            else:
+                seccion_actual.append(linea)
+        if seccion_actual:
+            secciones.append('\n'.join(seccion_actual))
+
+        # Palabras clave para el tema
+        tema_lower = tema.lower()
+        palabras_clave = [tema_lower]
+        
+        # Extender palabras clave según el tema
+        if "respiratorio" in tema_lower or "respiración" in tema_lower:
+            palabras_clave.extend(["respiración", "pulmones", "alvéolos", "oxígeno", 
+                                 "diafragma", "bronquios", "tráquea", "ventilación"])
+        elif "digestivo" in tema_lower or "digestión" in tema_lower:
+            palabras_clave.extend(["digestión", "alimentos", "estómago", "intestino", 
+                                 "enzimas", "hígado", "páncreas"])
+        # Añadir otros casos para diferentes temas
+
+        # Buscar secciones relevantes
+        secciones_relevantes = []
+        for seccion in secciones:
+            seccion_lower = seccion.lower()
+            # Calcular relevancia por número de palabras clave encontradas
+            relevancia = sum(1 for keyword in palabras_clave if keyword in seccion_lower)
+            if relevancia > 0:
+                secciones_relevantes.append((seccion, relevancia))
+
+        # Ordenar por relevancia y unir
+        secciones_relevantes.sort(key=lambda x: x[1], reverse=True)
+        texto_procesado = "\n\n".join(seccion for seccion, _ in secciones_relevantes)
+
+        if not texto_procesado:
+            print("WARN: No se encontraron secciones específicas, usando texto completo")
+            texto_procesado = texto_pdf
+        else:
+            print(f"INFO: Se encontraron {len(secciones_relevantes)} secciones relevantes")
+
+        # 3. Generar Resumen con el texto procesado
         prompt_resumen = (
-            f"Genera un resumen EXTENSO y DETALLADO sobre '{tema}' basado ESTRICTAMENTE en el texto proporcionado. "
-            f"Estructura sugerida si aplica:\n1. [Título sección]:\n   [Contenido]\n2. [Título sección]:\n   [Contenido]\n...\nN. Conclusión:\n   [Contenido]\n\n"
-            f"NO añadas introducciones como 'Aquí está el resumen'. Empieza directo con el contenido.\nTexto:\n{texto_pdf}"
+            f"Genera un resumen MUY EXTENSO y DETALLADO sobre '{tema}' (MÍNIMO 2000 PALABRAS).\n"
+            f"IMPORTANTE:\n"
+            f"- NO INCLUYAS frases introductorias como 'Aquí tienes...', 'Este es un resumen...', etc.\n"
+            f"- COMIENZA DIRECTAMENTE con el contenido del tema.\n"
+            f"- NO USES encabezados tipo 'Introducción' o 'Resumen'.\n\n"
+            f"Si el tema es álgebra o relacionado, desarrolla en profundidad:\n"
+            f"1. Definiciones y conceptos algebraicos con ejemplos detallados y explicaciones extensas\n"
+            f"2. Propiedades y reglas importantes con demostraciones completas\n"
+            f"3. Ejemplos resueltos paso a paso con explicaciones detalladas\n"
+            f"4. Aplicaciones prácticas y tipos de problemas con soluciones explicadas\n"
+            f"5. Conexiones con otros conceptos matemáticos y su relevancia\n"
+            f"6. Métodos de resolución alternativos con comparaciones\n"
+            f"7. Historia y contexto del concepto cuando sea relevante\n"
+            f"8. Aplicaciones en el mundo real y otros campos\n\n"
+            f"Organiza el contenido en secciones numeradas y subsecciones detalladas.\n"
+            f"Para cada concepto importante incluye:\n"
+            f"- Definición formal y explicación en lenguaje simple\n"
+            f"- Ejemplos detallados y contraejemplos\n"
+            f"- Casos especiales y excepciones\n"
+            f"- Errores comunes y cómo evitarlos\n\n"
+            f"Si encuentras fórmulas o expresiones algebraicas, provee:\n"
+            f"- Explicación paso a paso de su desarrollo\n"
+            f"- Significado de cada componente\n"
+            f"- Contexto de uso y limitaciones\n\n"
+            f"IMPORTANTE: Si no encuentras contenido específico de '{tema}', indícalo claramente.\n\n"
+            f"Texto a analizar:\n{texto_procesado}"
         )
-        # llamar_api_gemini devuelve texto o string de error
+
+        # Llamar a la API sin el parámetro max_tokens
         resumen_raw = config_logic.llamar_api_gemini(prompt_resumen)
 
         if isinstance(resumen_raw, str) and "Error" in resumen_raw[:10]:
@@ -314,10 +442,21 @@ def generar_resumen_logica(curso, libro, tema, gen_puntos):
     return resultado
 
 
-def generar_resumen_pdf_bytes(resumen_txt, puntos_txt, curso, libro, tema):
+def generar_resumen_pdf_bytes(
+    resumen_txt: str,
+    puntos_txt: str = "",
+    titulo: str = "Resumen",
+    subtitulo: str = ""
+) -> Optional[bytes]:
     """
     Genera el contenido de un PDF con el resumen y puntos clave.
-    Retorna los bytes del PDF o None en caso de error.
+    Args:
+        resumen_txt: Texto del resumen
+        puntos_txt: Texto de los puntos clave (opcional)
+        titulo: Título del documento
+        subtitulo: Subtítulo del documento (opcional)
+    Returns:
+        bytes del PDF o None en caso de error
     """
     if not FPDF_AVAILABLE:
         print(
@@ -338,43 +477,35 @@ def generar_resumen_pdf_bytes(resumen_txt, puntos_txt, curso, libro, tema):
     )
 
     if not resumen_valido and not puntos_validos:
-        print(
-            "WARN (resumen_logic): No hay contenido válido (resumen o puntos) para generar PDF."
-        )
+        print("WARN (resumen_logic): No hay contenido válido para generar PDF.")
         return None
 
     try:
         pdf = FPDF()
         pdf.add_page()
-        # Usar márgenes estándar
         pdf.set_left_margin(15)
         pdf.set_right_margin(15)
         pdf.set_top_margin(15)
-        pdf.set_auto_page_break(auto=True, margin=15)  # Margen inferior
+        pdf.set_auto_page_break(auto=True, margin=15)
 
-        # Título Principal (Codificado correctamente)
+        # Título Principal
         pdf.set_font("Helvetica", "B", 16)
-        titulo = f"Resumen: {tema}"
         pdf.cell(
-            0,
-            10,
+            0, 10,
             titulo.encode("latin-1", "replace").decode("latin-1"),
-            ln=True,
-            align="C",
+            ln=True, align="C"
         )
         pdf.ln(5)
 
-        # Metadatos (Codificado correctamente)
-        pdf.set_font("Helvetica", "I", 10)
-        meta = f"Curso: {curso} | Libro: {libro}"
-        pdf.cell(
-            0,
-            8,
-            meta.encode("latin-1", "replace").decode("latin-1"),
-            ln=True,
-            align="C",
-        )
-        pdf.ln(8)
+        # Subtítulo si existe
+        if subtitulo:
+            pdf.set_font("Helvetica", "I", 10)
+            pdf.cell(
+                0, 8,
+                subtitulo.encode("latin-1", "replace").decode("latin-1"),
+                ln=True, align="C"
+            )
+            pdf.ln(8)
 
         # --- Contenido del Resumen ---
         if resumen_valido:
