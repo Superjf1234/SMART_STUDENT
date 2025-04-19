@@ -27,8 +27,10 @@ if not GEMINI_API_KEY:
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"  # O la URL del modelo que prefieras
 
 # --- Estructura de Cursos y PDFs ---
-# Asegúrate de que los nombres de archivo PDF coincidan con los que pongas en assets/pdfs/...
 CURSOS = {
+    ###################
+    # ENSEÑANZA BÁSICA
+    ###################
     "1ro Básico": {
         "Ciencias Naturales": "CNASM25E1B.pdf",
         "Matemáticas": "MATSA25E1B.pdf",
@@ -41,13 +43,46 @@ CURSOS = {
         "Historia": "HISSM25E2B.pdf",
         "Lenguaje y Literatura": "LYLSA25E2B.pdf",
     },
-    # ... (Completa con TODOS tus cursos y archivos) ...
+    "3ro Básico": {
+        "Ciencias Naturales": "CNASM25E3B.pdf",
+        "Matemáticas": "MATSA25E3B.pdf",
+        "Historia": "HISSM25E3B.pdf",
+        "Lenguaje y Literatura": "LYLSA25E3B.pdf",
+    },
+    "4to Básico": {
+        "Ciencias Naturales": "CNASM25E4B.pdf",
+        "Matemáticas": "MATSA25E4B.pdf",
+        "Historia": "HISSM25E4B.pdf",
+        "Lenguaje y Literatura": "LYLSA25E4B.pdf",
+    },
+    "5to Básico": {
+        "Ciencias Naturales": "CNASM25E5B.pdf",
+        "Matemáticas": "MATSA25E5B.pdf",
+        "Historia": "HISSM25E5B.pdf",
+        "Lenguaje y Literatura": "LYLSA25E5B.pdf",
+    },
+    "6to Básico": {
+        "Ciencias Naturales": "CNASM25E6B.pdf",
+        "Matemáticas": "MATSA25E6B.pdf",
+        "Historia": "HISSM25E6B.pdf",
+        "Lenguaje y Literatura": "LYLSA25E6B.pdf",
+    },
+    "7mo Básico": {
+        "Ciencias Naturales": "CNASM25E7B.pdf",
+        "Matemáticas": "MATSA25E7B.pdf",
+        "Historia": "HISSM25E7B.pdf",
+        "Lenguaje y Literatura": "LYLSA25E7B.pdf",
+    },
     "8vo Básico": {
         "Ciencias Naturales": "CNASM25E8B.pdf",
         "Matemáticas": "MATSA25E8B.pdf",
         "Historia": "HISSM25E8B.pdf",
         "Lenguaje y Literatura": "LYLSA25E8B.pdf",
     },
+
+    ##################
+    # ENSEÑANZA MEDIA
+    ##################
     "1ro Medio": {
         "Biología": "BIOSA25E1M.pdf",
         "Física": "FISSA25E1M.pdf",
@@ -75,6 +110,13 @@ CURSOS = {
         "Matemáticas": "MATSA25E4M.pdf",
     },
 }
+
+
+
+# Verificación de integridad de CURSOS al cargar el módulo
+print(f"INFO (config_logic): Cargados {len(CURSOS)} cursos con sus libros correspondientes")
+for curso, libros in CURSOS.items():
+    print(f"  - {curso}: {len(libros)} libros")
 
 # --- Configuración de Hashing de Contraseñas ---
 # Crear contexto de hashing (hacer esto una sola vez)
@@ -225,107 +267,122 @@ def extraer_texto_pdf(curso, archivo):
 
 
 def llamar_api_gemini(prompt):
-    """Llama a la API de Gemini para generar contenido. Devuelve texto o mensaje de error."""
-    if not GEMINI_API_KEY:
-        error_msg = "Error: API Key de Gemini no configurada."
-        print(f"ERROR (config_logic): {error_msg}", file=sys.stderr)
-        return error_msg  # Devolver mensaje de error
-
-    headers = {"Content-Type": "application/json"}
-    # Limitar longitud del prompt (ajustar según modelo y necesidad)
-    max_prompt_len = 30000  # Caracteres, no tokens necesariamente
-    if len(prompt) > max_prompt_len:
-        print(
-            f"WARN (config_logic): Prompt truncado a {max_prompt_len} caracteres (original: {len(prompt)})"
-        )
-        prompt = prompt[:max_prompt_len]
-
-    data = {"contents": [{"parts": [{"text": prompt}]}]}
-    api_url_completa = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
-    print(
-        f"INFO (config_logic): Llamando API Gemini (URL: ...{GEMINI_API_URL[-20:]}, prompt len: {len(prompt)})"
-    )
-
+    """Llama a la API de Gemini con un prompt y devuelve la respuesta."""
     try:
-        # Timeout más largo puede ser necesario para generación compleja
-        response = requests.post(
-            api_url_completa, headers=headers, json=data, timeout=180
-        )
-        response.raise_for_status()  # Lanza HTTPError para respuestas 4xx/5xx
-        respuesta_json = response.json()
-
-        # Validaciones robustas de la respuesta
-        if (
-            not isinstance(respuesta_json.get("candidates"), list)
-            or not respuesta_json["candidates"]
-        ):
-            error_msg = "Error: Respuesta de la API no contiene 'candidates' válidos."
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+        headers = {"Content-Type": "application/json"}
+        if GEMINI_API_KEY:
+            headers["x-goog-api-key"] = GEMINI_API_KEY
+        
+        # Aumentar el límite de tokens en la solicitud
+        data = {
+            "contents": [{"parts":[{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": 8192,  # Aumentar el límite de tokens en la salida
+                "topP": 0.8,
+                "topK": 40
+            }
+        }
+        # Limitar longitud del prompt (ajustar según modelo y necesidad)
+        max_prompt_len = 30000  # Caracteres, no tokens necesariamente
+        if len(prompt) > max_prompt_len:
             print(
-                f"ERROR API (config_logic): {error_msg} Respuesta: {respuesta_json}",
-                file=sys.stderr,
+                f"WARN (config_logic): Prompt truncado a {max_prompt_len} caracteres (original: {len(prompt)})"
             )
-            return error_msg  # Devolver mensaje de error
+            prompt = prompt[:max_prompt_len]
 
-        candidate = respuesta_json["candidates"][0]
-        finish_reason = candidate.get("finishReason", "UNKNOWN")
-
-        # Comprobar si el contenido fue bloqueado
-        if finish_reason != "STOP":
-            print(
-                f"WARN API (config_logic): Finish Reason no fue STOP: {finish_reason}"
-            )
-            if finish_reason == "SAFETY":
-                safety_ratings = candidate.get("safetyRatings", [])
-                error_msg = f"Error: Contenido bloqueado por seguridad (Razón: {finish_reason}). Ratings: {safety_ratings}"
-                print(f"ERROR API (config_logic): {error_msg}", file=sys.stderr)
-                return error_msg  # Devolver mensaje de error
-            # Podrías manejar otros finish_reason aquí (MAX_TOKENS, etc.)
-
-        # Extraer texto de las partes
-        content = candidate.get("content", {})
-        parts = content.get("parts", [])
-        if not isinstance(parts, list) or not parts:
-            error_msg = f"Error: Formato de 'content'/'parts' inválido o ausente (Finish Reason: {finish_reason})."
-            print(
-                f"ERROR API (config_logic): {error_msg} Candidate: {candidate}",
-                file=sys.stderr,
-            )
-            return error_msg  # Devolver mensaje de error
-
-        texto_generado = ""
-        for part in parts:
-            if "text" in part and isinstance(part["text"], str):
-                texto_generado += part["text"]
-
-        if not texto_generado:
-            # Esto puede pasar si la API devuelve partes vacías o sin texto
-            print(
-                f"WARN API (config_logic): No se encontró texto útil en la respuesta (Finish Reason: {finish_reason}). Parts: {parts}",
-                file=sys.stderr,
-            )
-            # Podrías devolver un error o un string vacío dependiendo de cómo lo manejes
-            return "Advertencia: La API no devolvió texto útil."
-
-        print("INFO (config_logic): Texto recibido de la API Gemini.")
-        return texto_generado  # Devolver texto generado
-
-    except requests.exceptions.Timeout:
-        error_msg = "Error: Timeout al conectar con la API de Gemini."
-        print(f"ERROR API (config_logic): {error_msg}", file=sys.stderr)
-        return error_msg  # Devolver mensaje de error
-    except requests.exceptions.RequestException as e:
-        error_msg = f"Error de conexión con la API de Gemini: {e}"
-        print(f"ERROR API (config_logic): {error_msg}", file=sys.stderr)
-        return error_msg  # Devolver mensaje de error
-    except KeyError as e_key:
-        error_msg = f"Error al procesar la respuesta de la API (Falta clave: {e_key})."
+        api_url_completa = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
         print(
-            f"ERROR API (config_logic): {error_msg} Respuesta: {response.text[:500]}...",
-            file=sys.stderr,
+            f"INFO (config_logic): Llamando API Gemini (URL: ...{GEMINI_API_URL[-20:]}, prompt len: {len(prompt)})"
         )
-        return error_msg  # Devolver mensaje de error
-    except Exception as e_gen:
-        error_msg = f"Ocurrió un error inesperado al llamar a la API: {e_gen}"
+
+        try:
+            # Timeout más largo puede ser necesario para generación compleja
+            response = requests.post(
+                api_url_completa, headers=headers, json=data, timeout=180
+            )
+            response.raise_for_status()  # Lanza HTTPError para respuestas 4xx/5xx
+            respuesta_json = response.json()
+
+            # Validaciones robustas de la respuesta
+            if (
+                not isinstance(respuesta_json.get("candidates"), list)
+                or not respuesta_json["candidates"]
+            ):
+                error_msg = "Error: Respuesta de la API no contiene 'candidates' válidos."
+                print(
+                    f"ERROR API (config_logic): {error_msg} Respuesta: {respuesta_json}",
+                    file=sys.stderr,
+                )
+                return error_msg  # Devolver mensaje de error
+
+            candidate = respuesta_json["candidates"][0]
+            finish_reason = candidate.get("finishReason", "UNKNOWN")
+
+            # Comprobar si el contenido fue bloqueado
+            if finish_reason != "STOP":
+                print(
+                    f"WARN API (config_logic): Finish Reason no fue STOP: {finish_reason}"
+                )
+                if finish_reason == "SAFETY":
+                    safety_ratings = candidate.get("safetyRatings", [])
+                    error_msg = f"Error: Contenido bloqueado por seguridad (Razón: {finish_reason}). Ratings: {safety_ratings}"
+                    print(f"ERROR API (config_logic): {error_msg}", file=sys.stderr)
+                    return error_msg  # Devolver mensaje de error
+                # Podrías manejar otros finish_reason aquí (MAX_TOKENS, etc.)
+
+            # Extraer texto de las partes
+            content = candidate.get("content", {})
+            parts = content.get("parts", [])
+            if not isinstance(parts, list) or not parts:
+                error_msg = f"Error: Formato de 'content'/'parts' inválido o ausente (Finish Reason: {finish_reason})."
+                print(
+                    f"ERROR API (config_logic): {error_msg} Candidate: {candidate}",
+                    file=sys.stderr,
+                )
+                return error_msg  # Devolver mensaje de error
+
+            texto_generado = ""
+            for part in parts:
+                if "text" in part and isinstance(part["text"], str):
+                    texto_generado += part["text"]
+
+            if not texto_generado:
+                # Esto puede pasar si la API devuelve partes vacías o sin texto
+                print(
+                    f"WARN API (config_logic): No se encontró texto útil en la respuesta (Finish Reason: {finish_reason}). Parts: {parts}",
+                    file=sys.stderr,
+                )
+                # Podrías devolver un error o un string vacío dependiendo de cómo lo manejes
+                return "Advertencia: La API no devolvió texto útil."
+
+            print("INFO (config_logic): Texto recibido de la API Gemini.")
+            return texto_generado  # Devolver texto generado
+
+        except requests.exceptions.Timeout:
+            error_msg = "Error: Timeout al conectar con la API de Gemini."
+            print(f"ERROR API (config_logic): {error_msg}", file=sys.stderr)
+            return error_msg  # Devolver mensaje de error
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Error de conexión con la API de Gemini: {e}"
+            print(f"ERROR API (config_logic): {error_msg}", file=sys.stderr)
+            return error_msg  # Devolver mensaje de error
+        except KeyError as e_key:
+            error_msg = f"Error al procesar la respuesta de la API (Falta clave: {e_key})."
+            print(
+                f"ERROR API (config_logic): {error_msg} Respuesta: {response.text[:500]}...",
+                file=sys.stderr,
+            )
+            return error_msg  # Devolver mensaje de error
+        except Exception as e_gen:
+            error_msg = f"Ocurrió un error inesperado al llamar a la API: {e_gen}"
+            print(f"ERROR API (config_logic): {error_msg}", file=sys.stderr)
+            traceback.print_exc()
+            return error_msg  # Devolver mensaje de error
+
+    except Exception as e:
+        error_msg = f"Ocurrió un error inesperado al llamar a la API: {e}"
         print(f"ERROR API (config_logic): {error_msg}", file=sys.stderr)
         traceback.print_exc()
         return error_msg  # Devolver mensaje de error
@@ -380,6 +437,33 @@ def verificar_api_gemini():
         )
         traceback.print_exc()
         return False
+
+
+def _curso_sort_key(curso: str) -> tuple:
+    """Helper function to sort cursos in correct order."""
+    # Extraer el número y el nivel
+    numero = ""
+    for char in curso:
+        if char.isdigit():
+            numero += char
+    
+    # Convertir a int para ordenamiento numérico
+    num = int(numero) if numero else 0
+    
+    # Prioridad: Básico = 0, Medio = 1
+    prioridad = 1 if "Medio" in curso else 0
+    
+    return (prioridad, num)
+
+def obtener_lista_cursos():
+    """Retorna la lista de cursos ordenada para la lista desplegable."""
+    # Obtener lista de cursos de CURSOS
+    lista_cursos = list(CURSOS.keys())
+    
+    # Ordenar usando la función helper
+    lista_cursos.sort(key=_curso_sort_key)
+    
+    return lista_cursos
 
 
 # --- Puedes añadir aquí un bloque if __name__ == "__main__": para probar funciones ---

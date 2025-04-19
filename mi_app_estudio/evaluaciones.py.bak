@@ -1,0 +1,615 @@
+"""
+Módulo para la pestaña de evaluaciones de SMART_STUDENT.
+
+Este módulo contiene la funcionalidad completa de evaluaciones, incluyendo
+la interfaz de usuario, el temporizador, y la lógica de generación/revisión.
+"""
+
+import reflex as rx
+
+from typing import Dict, List, Set, Union, Any, Optional
+
+from mi_app_estudio.state import AppState, BACKEND_AVAILABLE, config_logic, eval_logic, db_logic, error_callout, PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME
+
+# Constantes
+MAX_QUESTIONS = 15
+EVALUATION_TIME = 2000
+MIN_RESUMEN_LENGTH = 50
+
+class EvaluationState(AppState):
+    """Estado específico para la funcionalidad de evaluaciones, hereda de AppState."""
+    
+    is_eval_active: bool = False
+    is_reviewing_eval: bool = False
+    eval_preguntas: List[Dict[str, Any]] = []
+    eval_current_idx: int = 0
+    eval_user_answers: Dict[int, Union[str, Set[str]]] = {}
+    eval_score: Optional[float] = None
+    eval_correct_count: int = 0
+    eval_total_q: int = 0
+    is_generation_in_progress: bool = False
+    eval_error_message: str = ""
+    eval_timer_active: bool = False
+    eval_timer_paused: bool = False
+    eval_timer_seconds: int = EVALUATION_TIME
+    eval_timer_id: Optional[str] = None
+    eval_nota: Optional[float] = None
+    show_result_modal: bool = False
+
+    @rx.var
+    def current_eval_question(self) -> Optional[Dict[str, Any]]:
+        if self.eval_preguntas and 0 <= self.eval_current_idx < self.eval_total_q:
+            q = self.eval_preguntas[self.eval_current_idx]
+            return q if isinstance(q, dict) else None
+        return None
+
+    @rx.var
+    def is_last_eval_question(self) -> bool:
+        return self.eval_total_q > 0 and self.eval_current_idx >= self.eval_total_q - 1
+
+    @rx.var
+    def is_first_eval_question(self) -> bool:
+        return self.eval_current_idx <= 0
+    
+    @rx.var
+    def eval_time_formatted(self) -> str:
+        minutes = self.eval_timer_seconds // 60
+        seconds = self.eval_timer_seconds % 60
+        return f"{minutes:02d}:{seconds:02d}"
+    
+    @rx.var
+    def eval_nota_formateada(self) -> str:
+        if self.eval_nota is None:
+            return "0,0"
+        nota = 1.0 + (self.eval_nota / 100) * 6.0
+        return f"{nota:.1f}".replace('.', ',')
+    
+    @rx.var
+    def eval_progress(self) -> int:
+        if self.eval_total_q == 0:
+            return 0
+        return int(((self.eval_current_idx + 1) / self.eval_total_q) * 100)
+
+    @rx.var
+    def get_current_question_options(self) -> List[Dict[str, str]]:
+        if not self.current_eval_question:
+            return []
+        opciones = self.current_eval_question.get("opciones", [])
+        if not isinstance(opciones, list):
+            return []
+        return [
+            {"id": opt.get("id", ""), "texto": opt.get("texto", "Opción sin texto")}
+            for opt in opciones if isinstance(opt, dict)
+        ]
+
+    def start_eval_timer(self):
+        if self.eval_timer_active:
+            return
+        self.eval_timer_active = True
+        self.eval_timer_paused = False
+        self.eval_timer_seconds = EVALUATION_TIME
+        self.update_timer()
+        yield
+        
+    def pause_resume_timer(self):
+        if not self.eval_timer_active:
+            return
+        self.eval_timer_paused = not self.eval_timer_paused
+        if not self.eval_timer_paused:
+            self.update_timer()
+        yield
+
+    def update_timer(self):
+        if not self.eval_timer_active or self.eval_timer_paused:
+            return
+        self.eval_timer_seconds -= 1
+        if self.eval_timer_seconds <= 0:
+            self.eval_timer_active = False
+            self.calculate_eval_score()
+            return
+        self.eval_timer_id = self.set_timeout(1, self.update_timer)
+        
+    def restart_evaluation(self):
+        self.eval_timer_active = False
+        self.eval_timer_paused = False
+        if self.eval_timer_id:
+            self.clear_timeout(self.eval_timer_id)
+            self.eval_timer_id = None
+        self.is_reviewing_eval = False
+        self.eval_current_idx = 0
+        self.eval_user_answers = {}
+        self.eval_score = None
+        self.eval_correct_count = 0
+        self.eval_nota = None
+        self.show_result_modal = False
+        if self.eval_preguntas:
+            self.is_eval_active = True
+            self.start_eval_timer()
+        else:
+            self.generate_evaluation()
+        yield
+    
+    def close_result_modal(self):
+        self.show_result_modal = False
+        yield
+    
+    def set_eval_answer(self, answer_value: Union[str, List[str]]):
+        if not self.is_eval_active or self.is_reviewing_eval or not self.eval_preguntas:
+            return
+        idx = self.eval_current_idx
+        if not (0 <= idx < len(self.eval_preguntas)):
+            return
+        try:
+            q = self.eval_preguntas[idx]
+            if not isinstance(q, dict):
+                return
+            q_type = q.get("tipo", "")
+            if q_type == "opcion_multiple":
+                if isinstance(answer_value, str):
+                    self.eval_user_answers[idx] = answer_value
+            elif q_type == "seleccion_multiple":
+                if isinstance(answer_value, list):
+                    self.eval_user_answers[idx] = set(str(v) for v in answer_value)
+        except Exception as e:
+            print(f"Error set_eval_answer idx {idx}: {e}")
+        yield
+
+    def update_multiple_answer(self, option_id: str, checked: bool):
+        idx = self.eval_current_idx
+        if not (0 <= idx < len(self.eval_preguntas)):
+            return
+        if not isinstance(self.eval_user_answers.get(idx), set):
+            self.eval_user_answers[idx] = set()
+        if checked:
+            self.eval_user_answers[idx].add(option_id)
+        else:
+            self.eval_user_answers[idx].discard(option_id)
+        yield
+
+    def next_eval_question(self):
+        if self.eval_preguntas and self.eval_current_idx < self.eval_total_q - 1:
+            self.eval_current_idx += 1
+            yield
+
+    def prev_eval_question(self):
+        if self.eval_current_idx > 0:
+            self.eval_current_idx -= 1
+            yield
+
+    def calculate_eval_score(self):
+        if not self.eval_preguntas:
+            self.eval_error_message = "No hay preguntas para evaluar."
+            yield
+            return
+        try:
+            self.eval_timer_active = False
+            self.eval_timer_paused = False
+            if self.eval_timer_id:
+                self.clear_timeout(self.eval_timer_id)
+                self.eval_timer_id = None
+            correct = 0
+            total = self.eval_total_q
+            if total == 0:
+                self.eval_error_message = "No hay preguntas válidas para evaluar."
+                yield
+                return
+            for i, q_dict in enumerate(self.eval_preguntas):
+                if not isinstance(q_dict, dict):
+                    continue
+                u_ans = self.eval_user_answers.get(i)
+                c_ans = q_dict.get("respuesta_correcta")
+                q_type = q_dict.get("tipo")
+                correct_inc = 0
+                if q_type == "opcion_multiple" and isinstance(u_ans, str) and u_ans == c_ans:
+                    correct_inc = 1
+                elif q_type == "seleccion_multiple":
+                    c_set = set(c_ans) if isinstance(c_ans, list) else set()
+                    u_set = u_ans if isinstance(u_ans, set) else set()
+                    if u_set and c_set and u_set == c_set:
+                        correct_inc = 1
+                correct += correct_inc
+            self.eval_correct_count = correct
+            self.eval_score = (correct / total) * 100.0
+            self.eval_nota = self.eval_score
+            self.is_reviewing_eval = True
+            self.is_eval_active = False
+            self.eval_current_idx = 0
+            self.show_result_modal = True
+            self._guardar_resultado_en_bd()
+        except Exception as calc_e:
+            print(f"Error cálculo score: {calc_e}")
+            self.eval_error_message = "Error al calcular el puntaje. Inténtalo nuevamente."
+            self.is_reviewing_eval = False
+            self.is_eval_active = True
+        yield
+    
+    def _guardar_resultado_en_bd(self):
+        if self.logged_in_username and BACKEND_AVAILABLE and hasattr(db_logic, "guardar_resultado_evaluacion"):
+            try:
+                db_logic.guardar_resultado_evaluacion(
+                    self.logged_in_username,
+                    self.selected_curso or "N/A",
+                    self.selected_libro or "N/A",
+                    self.selected_tema or "N/A",
+                    self.eval_nota if self.eval_nota is not None else 0.0,
+                )
+            except Exception as db_e:
+                print(f"Error guardando resultado en BD: {db_e}")
+
+    async def generate_evaluation(self):
+        if not self.resumen_content or len(self.resumen_content.strip()) < MIN_RESUMEN_LENGTH:
+            self.eval_error_message = f"Debes generar un resumen con al menos {MIN_RESUMEN_LENGTH} caracteres."
+            yield
+            return
+        if not BACKEND_AVAILABLE:
+            self.eval_error_message = "El servicio de evaluación no está disponible."
+            yield
+            return
+        self.is_generation_in_progress = True
+        self.eval_error_message = ""
+        self.is_eval_active = False
+        self.is_reviewing_eval = False
+        self.eval_preguntas = []
+        self.eval_current_idx = 0
+        self.eval_correct_count = 0
+        self.eval_total_q = 0
+        self.eval_user_answers = {}
+        self.eval_score = None
+        self.eval_nota = None
+        self.show_result_modal = False
+        self.eval_timer_active = False
+        self.eval_timer_paused = False
+        if self.eval_timer_id:
+            self.clear_timeout(self.eval_timer_id)
+            self.eval_timer_id = None
+        yield
+        try:
+            if not hasattr(eval_logic, "generar_evaluacion"):
+                raise AttributeError("El módulo de evaluación no está correctamente configurado.")
+            content = self.resumen_content + (
+                "\n\nPuntos:\n" + self.puntos_content
+                if self.include_puntos and self.puntos_content
+                else ""
+            )
+            result = eval_logic.generar_evaluacion(content)
+            if isinstance(result, dict) and result.get("status") == "EXITO":
+                preguntas = result.get("preguntas")
+                if isinstance(preguntas, list) and preguntas:
+                    self.eval_preguntas = [
+                        p for p in preguntas[:MAX_QUESTIONS] if isinstance(p, dict) and "pregunta" in p
+                    ]
+                    if not self.eval_preguntas:
+                        self.eval_error_message = "No se pudieron generar preguntas válidas."
+                        self.is_eval_active = False
+                    else:
+                        self.eval_total_q = len(self.eval_preguntas)
+                        self.is_eval_active = True
+                        self.start_eval_timer()
+                else:
+                    self.eval_error_message = "No se pudieron generar preguntas."
+                    self.is_eval_active = False
+            else:
+                self.eval_error_message = (
+                    result.get("message", "Error al generar la evaluación.")
+                    if isinstance(result, dict)
+                    else "Error en la respuesta del servidor."
+                )
+        except AttributeError as ae:
+            self.eval_error_message = "El sistema de evaluación no está disponible."
+            print(f"ERROR: {ae}")
+        except Exception as e:
+            import traceback
+            self.eval_error_message = "Error inesperado al generar la evaluación."
+            print(f"ERROR G-EVAL: {traceback.format_exc()}")
+        finally:
+            self.is_generation_in_progress = False
+            yield
+
+def evaluacion_tab():
+    return rx.vstack(
+        rx.cond(
+            EvaluationState.is_eval_active | EvaluationState.is_reviewing_eval,
+            rx.vstack(
+                rx.hstack(
+                    rx.heading(
+                        rx.cond(
+                            EvaluationState.is_reviewing_eval,
+                            "Revisión de Evaluación",
+                            "Evaluación en Curso"
+                        ),
+                        size="5",
+                    ),
+                    rx.spacer(),
+                    rx.cond(
+                        EvaluationState.is_eval_active,
+                        rx.hstack(
+                            rx.icon("timer", color="orange.500"),
+                            rx.text(
+                                EvaluationState.eval_time_formatted,
+                                font_size="lg",
+                                font_weight="bold",
+                                color=rx.cond(
+                                    EvaluationState.eval_timer_seconds < 300,
+                                    "red.500",
+                                    "blue.500"
+                                ),
+                            ),
+                            rx.button(
+                                rx.cond(EvaluationState.eval_timer_paused, "Reanudar", "Pausar"),
+                                on_click=EvaluationState.pause_resume_timer,
+                                variant="soft",
+                                size="2",
+                                color_scheme=ACCENT_COLOR_SCHEME,
+                            ),
+                            spacing="2",
+                        ),
+                    ),
+                    rx.text(
+                        f"Pregunta {EvaluationState.eval_current_idx + 1} de {EvaluationState.eval_total_q}",
+                        font_size="md",
+                        color="gray.500",
+                    ),
+                    w="100%",
+                    pb="2",
+                    border_bottom="1px solid var(--gray-5)",
+                    mb="4",
+                ),
+                rx.progress(
+                    value=EvaluationState.eval_progress,
+                    size="2",
+                    color_scheme=PRIMARY_COLOR_SCHEME,
+                    w="100%",
+                    mb="4",
+                ),
+                rx.cond(
+                    EvaluationState.current_eval_question != None,
+                    rx.vstack(
+                        rx.box(
+                            rx.markdown(
+                                EvaluationState.current_eval_question.get("pregunta", ""),
+                                color_scheme="gray",
+                                font_size="lg",
+                                font_weight="medium",
+                                styles={"p": {"marginBottom": "1em"}},
+                            ),
+                            w="100%", 
+                            mb="4",
+                        ),
+                        rx.cond(
+                            EvaluationState.current_eval_question.get("tipo") == "opcion_multiple",
+                            rx.radio_group.root(
+                                rx.vstack(
+                                    rx.foreach(
+                                        EvaluationState.get_current_question_options,
+                                        lambda opcion, i: rx.radio_group.item(
+                                            opcion.get("texto", f"Opción {opcion.get('id', '')}"),
+                                            value=opcion.get("id", ""),
+                                            disabled=EvaluationState.is_reviewing_eval,
+                                            color_scheme=rx.cond(
+                                                EvaluationState.is_reviewing_eval,
+                                                rx.cond(
+                                                    EvaluationState.current_eval_question.get("respuesta_correcta") == opcion.get("id", ""),
+                                                    "green",
+                                                    rx.cond(
+                                                        EvaluationState.eval_user_answers.get(EvaluationState.eval_current_idx) == opcion.get("id", ""),
+                                                        "red",
+                                                        "gray"
+                                                    )
+                                                ),
+                                                PRIMARY_COLOR_SCHEME
+                                            ),
+                                            size="2",
+                                            aria_label=f"Opción {opcion.get('texto', 'sin texto')}",
+                                        )
+                                    ),
+                                    w="100%",
+                                    align_items="start",
+                                    spacing="3",
+                                ),
+                                value=rx.cond(
+                                    isinstance(EvaluationState.eval_user_answers.get(EvaluationState.eval_current_idx), str),
+                                    EvaluationState.eval_user_answers.get(EvaluationState.eval_current_idx, ""),
+                                    ""
+                                ),
+                                on_change=EvaluationState.set_eval_answer,
+                                w="100%",
+                            ),
+                            rx.vstack(
+                                rx.foreach(
+                                    EvaluationState.get_current_question_options,
+                                    lambda opcion, i: rx.checkbox(
+                                        opcion.get("texto", f"Opción {opcion.get('id', '')}"),
+                                        value=opcion.get("id", ""),
+                                        checked=rx.cond(
+                                            isinstance(EvaluationState.eval_user_answers.get(EvaluationState.eval_current_idx), set),
+                                            EvaluationState.eval_user_answers.get(EvaluationState.eval_current_idx, set()).contains(opcion.get("id", "")),
+                                            False
+                                        ),
+                                        on_change=lambda checked, id=opcion.get("id", ""): EvaluationState.update_multiple_answer(id, checked),
+                                        disabled=EvaluationState.is_reviewing_eval,
+                                        color_scheme=rx.cond(
+                                            EvaluationState.is_reviewing_eval,
+                                            rx.cond(
+                                                EvaluationState.current_eval_question.get("respuesta_correcta", []).contains(opcion.get("id", "")),
+                                                "green",
+                                                rx.cond(
+                                                    EvaluationState.eval_user_answers.get(EvaluationState.eval_current_idx, set()).contains(opcion.get("id", "")),
+                                                    "red",
+                                                    "gray"
+                                                )
+                                            ),
+                                            PRIMARY_COLOR_SCHEME
+                                        ),
+                                        size="2",
+                                        aria_label=f"Opción {opcion.get('texto', 'sin texto')}",
+                                    )
+                                ),
+                                spacing="3",
+                                w="100%",
+                                align_items="start",
+                            ),
+                        ),
+                        rx.cond(
+                            EvaluationState.is_reviewing_eval,
+                            rx.box(
+                                rx.card(
+                                    rx.vstack(
+                                        rx.heading("Explicación", size="3", mb="2"),
+                                        rx.markdown(
+                                            EvaluationState.current_eval_question.get("explicacion", "Sin explicación disponible"),
+                                            color_scheme="gray",
+                                        ),
+                                        align_items="start",
+                                        spacing="2",
+                                    ),
+                                    p="4",
+                                    variant="outline",
+                                    w="100%",
+                                    color_scheme="blue",
+                                    mt="4",
+                                ),
+                                w="100%",
+                            ),
+                        ),
+                        w="100%",
+                        spacing="4",
+                        align_items="start",
+                    ),
+                ),
+                rx.hstack(
+                    rx.button(
+                        "Anterior",
+                        on_click=EvaluationState.prev_eval_question,
+                        variant="soft",
+                        is_disabled=EvaluationState.is_first_eval_question,
+                        size="2",
+                    ),
+                    rx.spacer(),
+                    rx.cond(
+                        EvaluationState.is_reviewing_eval,
+                        rx.button(
+                            "Reiniciar Evaluación",
+                            on_click=EvaluationState.restart_evaluation,
+                            color_scheme="purple",
+                            size="2",
+                        ),
+                        rx.button(
+                            "Terminar y Calificar",
+                            on_click=EvaluationState.calculate_eval_score,
+                            color_scheme="green",
+                            size="2",
+                        ),
+                    ),
+                    rx.spacer(),
+                    rx.button(
+                        "Siguiente",
+                        on_click=EvaluationState.next_eval_question,
+                        variant="soft",
+                        is_disabled=EvaluationState.is_last_eval_question,
+                        size="2",
+                    ),
+                    w="100%",
+                    mt="8",
+                ),
+                w="100%",
+                p="6",
+                border="1px solid var(--gray-5)",
+                border_radius="large",
+                bg="var(--gray-1)",
+                spacing="4",
+            ),
+            rx.vstack(
+                rx.icon("clipboard-check", size="5xl", color="gray.400", mb="4"),
+                rx.heading("Prepárate para una Evaluación", size="5", mb="4"),
+                rx.text(
+                    "Primero debes crear un resumen para generar una evaluación basada en él.",
+                    text_align="center",
+                    color="gray.500",
+                    mb="6",
+                    max_width="400px",
+                ),
+                rx.button(
+                    rx.cond(
+                        EvaluationState.is_generation_in_progress,
+                        rx.hstack(rx.spinner(size="2"), "Generando evaluación..."),
+                        "Crear Evaluación"
+                    ),
+                    on_click=EvaluationState.generate_evaluation,
+                    size="3",
+                    color_scheme="purple",
+                    width="100%",
+                    margin_top="1em",
+                    is_disabled=rx.cond(
+                        (AppState.selected_tema == "") | EvaluationState.is_generation_in_progress,
+                        True,
+                        False,
+                    ),
+                ),
+                align_items="center",
+                justify="center",
+                min_h="60vh",
+                w="100%",
+                p="2em",
+                border="1px dashed var(--gray-5)",
+                border_radius="large",
+                bg="var(--gray-1)",
+            ),
+        ),
+        error_callout(EvaluationState.eval_error_message),
+        rx.modal(
+            rx.modal_overlay(
+                rx.modal_content(
+                    rx.modal_header("Resultado de la Evaluación"),
+                    rx.modal_body(
+                        rx.vstack(
+                            rx.heading(
+                                f"Tu nota es: {EvaluationState.eval_nota_formateada}",
+                                size="7",
+                                color=rx.cond(
+                                    (EvaluationState.eval_nota or 0) >= 60,
+                                    "green.500",
+                                    "red.500"
+                                ),
+                                text_align="center",
+                                mb="4",
+                            ),
+                            rx.stat(
+                                rx.stat_label("Respuestas Correctas"),
+                                rx.stat_number(f"{EvaluationState.eval_correct_count} de {EvaluationState.eval_total_q}"),
+                                rx.stat_help_text(
+                                    f"{int((EvaluationState.eval_correct_count / (EvaluationState.eval_total_q or 1)) * 100)}% de acierto"
+                                ),
+                                color_scheme=rx.cond(
+                                    (EvaluationState.eval_nota or 0) >= 60,
+                                    "green",
+                                    "red"
+                                ),
+                            ),
+                            rx.text(
+                                "Ahora puedes revisar las preguntas para ver las respuestas correctas y explicaciones.",
+                                text_align="center",
+                                mt="4",
+                            ),
+                            w="100%",
+                            align_items="center",
+                            p="4",
+                        )
+                    ),
+                    rx.modal_footer(
+                        rx.button(
+                            "Revisar Preguntas",
+                            on_click=EvaluationState.close_result_modal,
+                            color_scheme=PRIMARY_COLOR_SCHEME,
+                        ),
+                    ),
+                ),
+            ),
+            is_open=EvaluationState.show_result_modal,
+        ),
+        w="100%",
+        max_width="1000px",
+        p="2em",
+        align_items="center",
+        margin="0 auto",
+        spacing="4",
+    )
