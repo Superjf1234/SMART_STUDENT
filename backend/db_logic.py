@@ -1,6 +1,7 @@
 # backend/db_logic.py
 import sqlite3
 import os
+import sys
 from datetime import datetime
 import traceback
 
@@ -162,6 +163,39 @@ def obtener_historial(username):
         finally:
             conn.close()
     return historial
+
+
+def obtener_estadisticas_usuario(username: str) -> dict:
+    """Obtiene estadísticas de evaluaciones para un usuario específico: total y nota promedio."""
+    stats = {"total_evaluaciones": 0, "nota_promedio": 0.0}
+    if not username:
+        print(
+            "ERROR (db_logic): Intento de obtener estadísticas sin username.",
+            file=sys.stderr,
+        )
+        return stats
+    conn = get_db_connection()
+    if not conn:
+        return stats
+    try:
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT COUNT(*) as total, AVG(nota) as avg_nota FROM evaluacion_historial WHERE username = ?",
+                (username,)
+            )
+            row = cursor.fetchone()
+            if row:
+                stats["total_evaluaciones"] = row["total"] or 0
+                stats["nota_promedio"] = float(row["avg_nota"]) if row["avg_nota"] is not None else 0.0
+    except Exception as e:
+        print(
+            f"ERROR (db_logic): No se pudo obtener estadísticas de BD - {e}",
+            file=sys.stderr,
+        )
+    finally:
+        conn.close()
+    return stats
 
 
 # --- Inicialización ---
