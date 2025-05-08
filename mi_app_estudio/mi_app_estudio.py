@@ -2029,3 +2029,26 @@ def index() -> rx.Component:
 
 
 # FIN DEL SCRIPT - Asegúrate que no haya código extra después de esto.
+
+def analyze_code():
+    """
+    Analiza el código y muestra un resumen de las funciones y clases definidas.
+    """
+    import ast
+
+    with open(__file__, "r", encoding="utf-8") as f:
+        tree = ast.parse(f.read(), filename=__file__)
+
+    functions = [node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
+    classes = [node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+
+    print("Funciones definidas en el script:")
+    for func in functions:
+        print(f" - {func}")
+
+    print("\nClases definidas en el script:")
+    for cls in classes:
+        print(f" - {cls}")
+
+if __name__ == "__main__":
+    analyze_code()
