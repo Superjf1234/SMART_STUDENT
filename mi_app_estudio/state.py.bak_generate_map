@@ -1,0 +1,2681 @@
+# Archivo: mi_app_estudio/state.py
+# ¡VERSIÓN COMPLETA FINAL Y VERIFICADA!
+
+"""
+Módulo de estado base para SMART_STUDENT.
+Contiene la definición de AppState que es usada por otros módulos.
+"""
+
+import reflex as rx
+import sys, os, datetime, traceback, re
+from typing import Dict, List, Optional, Set, Union, Any
+import random
+from .translations import get_translations
+from .help_translations import get_help_questions
+
+# --- IMPORTACIONES EXTERNAS Y BACKEND ---
+# ¡NO DEBE HABER importaciones de .evaluaciones ni de .state aquí!
+BACKEND_AVAILABLE = False
+try:
+    # Asume que la carpeta 'backend' está en la raíz del proyecto
+    from backend import (
+        config_logic,
+        db_logic,
+        login_logic,
+        resumen_logic,
+        map_logic,
+        eval_logic,
+    )
+    if hasattr(db_logic, "inicializar_db") and callable(db_logic.inicializar_db):
+        db_logic.inicializar_db()
+        print("INFO: Base de datos inicializada.")
+    else:
+        print("WARN: Función 'inicializar_db' no encontrada en db_logic.")
+    print("INFO: Módulos de backend importados correctamente.")
+    BACKEND_AVAILABLE = True
+except ImportError as e:
+    print(
+        f"ERROR CRITICO: No se pueden importar módulos del backend: {e}.",
+        file=sys.stderr,
+    )
+    print(
+        "Verifique: 1) Ejecutar desde raíz, 2) 'backend/__init__.py' existe, 3) No hay errores internos en backend/*.py.",
+        file=sys.stderr,
+    )
+
+    # --- Mock Logic (Solo si el backend falla) ---
+    class MockLogic:
+        def __getattr__(self, name):
+            def _mock_func(*args, **kwargs):
+                print(f"ADVERTENCIA: Usando Mock para '{name}({args=}, {kwargs=})'.")
+                mock_data = {
+                    "CURSOS": {"Mock Curso": {"Mock Libro": "mock.pdf"}},
+                    "verificar_login": lambda u, p: (u == "test" and p == "123") or (u == "felipe" and p == "1234"),
+                    "generar_resumen_logica": lambda *a, **kw: {"status": "EXITO", "resumen": "Resumen Mock...", "puntos": "1. Punto Mock...", "message": "Generado con Mock"},
+                    "generar_resumen_pdf_bytes": lambda *a, **kw: b"%PDF...",
+                    "generar_nodos_localmente": lambda *a, **kw: {"status": "EXITO", "nodos": [{"titulo": "Nodo Central", "subnodos": ["Subnodo A", "Subnodo B"]}, {"titulo": "Otro Nodo"}]},
+                    "generar_mermaid_code": lambda *a, **kw: ("graph TD A[Centro]-->B(Nodo 1);...", None),
+                    "generar_visualizacion_html": lambda *a, **kw: "data:text/html,<html><body>Mock</body></html>",
+                    "generar_evaluacion": lambda curso, libro, tema: {
+                        "status": "EXITO",
+                        "preguntas": [
+                            {
+                                "pregunta": f"Pregunta {i+1}: ¿Es esto correcto?",
+                                "tipo": "verdadero_falso",
+                                "opciones": [
+                                    {"letra": "Verdadero", "texto": "Verdadero"},
+                                    {"letra": "Falso", "texto": "Falso"}
+                                ],
+                                "respuesta_correcta": random.choice(["Verdadero", "Falso"]),
+                                "explicacion": f"Respuesta para la pregunta {i+1}."
+                            } if (i % 3 == 0) else {
+                                "pregunta": f"Pregunta {i+1}: Selecciona la opción correcta.",
+                                "tipo": "alternativas",
+                                "opciones": [
+                                    {"letra": "a", "texto": "Opción A"},
+                                    {"letra": "b", "texto": "Opción B"},
+                                    {"letra": "c", "texto": "Opción C"}
+                                ],
+                                "respuesta_correcta": random.choice(["a", "b", "c"]),
+                                "explicacion": f"Respuesta para la pregunta {i+1}."
+                            }
+                            for i in range(15)  # Generar 15 preguntas
+                        ]
+                    },
+                    "obtener_estadisticas_usuario": lambda *a, **kw: [{"curso": "Mock C", "libro": "Mock L", "tema": "Mock T", "puntuacion": 85.0, "fecha": "Hoy"}],
+                    "guardar_resultado_evaluacion": lambda *a, **kw: print("Mock: Guardando resultado..."),
+                }
+                return (
+                    mock_data.get(name, lambda *a, **kw: None)(*args, **kwargs)
+                    if callable(mock_data.get(name))
+                    else mock_data.get(name)
+                )
+            return _mock_func
+    # --- Fin Mock Logic ---
+
+    config_logic = login_logic = db_logic = resumen_logic = map_logic = eval_logic = MockLogic()
+    print("ADVERTENCIA: Usando Mocks para la lógica del backend.", file=sys.stderr)
+# --- FIN IMPORTACIONES ---
+
+# --- UTILIDADES PARA VARIABLES REACTIVAS ---
+def resolve_file_path(url_or_path):
+    """
+    Resuelve una URL o ruta de archivo a una ruta de sistema de archivos.
+    
+    Args:
+        url_or_path: URL o ruta a resolver
+        
+    Returns:
+        Tupla (ruta_resuelta, mensaje_error) donde ruta_resuelta es la ruta
+        del sistema de archivos o None si no se pudo resolver, y mensaje_error
+        es un mensaje explicativo de cualquier error encontrado.
+    """
+    import os
+    
+    if not url_or_path:
+        return None, "Ruta vacía"
+        
+    # Eliminar cualquier parte de URL como '?query'
+    clean_path = url_or_path.split('?')[0]
+    
+    # Casos a manejar:
+    # 1. URLs externas (http/https) - No podemos acceder localmente
+    if clean_path.startswith(('http://', 'https://')):
+        return None, f"URL externa no accesible localmente: {clean_path}"
+        
+    # 2. Rutas absolutas del sistema de archivos
+    if os.path.isabs(clean_path):
+        if os.path.exists(clean_path):
+            if os.path.isfile(clean_path):
+                return clean_path, ""
+            return None, f"La ruta existe pero no es un archivo: {clean_path}"
+        return None, f"Ruta absoluta no encontrada: {clean_path}"
+        
+    # 3. URLs relativas (empiezan con /)
+    if clean_path.startswith('/'):
+        # Quitar la barra inicial para tratarla como ruta relativa
+        rel_path = clean_path.lstrip('/')
+        # Verificar si existe como ruta relativa desde el directorio actual
+        if os.path.exists(rel_path):
+            if os.path.isfile(rel_path):
+                return rel_path, ""
+            return None, f"La ruta relativa existe pero no es un archivo: {rel_path}"
+            
+        # Verificar si existe como ruta absoluta (considerando que el / inicial era parte de la ruta)
+        # Esto es para sistemas Unix donde / es la raíz
+        if os.path.exists(clean_path) and os.path.isfile(clean_path):
+            return clean_path, ""
+            
+        return None, f"Ruta relativa no encontrada: {rel_path}"
+        
+    # 4. Rutas relativas (sin / inicial)
+    if os.path.exists(clean_path):
+        if os.path.isfile(clean_path):
+            return clean_path, ""
+        return None, f"La ruta existe pero no es un archivo: {clean_path}"
+        
+    return None, f"Archivo no encontrado: {clean_path}"
+
+def get_safe_var_value(var, default=None):
+    """
+    Obtiene de manera segura el valor de una variable reactiva de Reflex.
+    Convierte la variable reactiva a un valor Python estándar.
+    
+    Args:
+        var: Variable reactiva de Reflex (rx.Var)
+        default: Valor por defecto si no se puede obtener el valor
+        
+    Returns:
+        El valor Python estándar de la variable reactiva, o default si no se puede obtener
+    """
+    if var is None:
+        return default
+        
+    try:
+        # Intentar obtener _var_value directamente (el valor subyacente)
+        if hasattr(var, "_var_value"):
+            return var._var_value
+    except:
+        pass
+        
+    try:
+        # Intentar conversión con str()
+        val = str(var)
+        # Limpiar cualquier resto de Var en la representación de cadena
+        if "<reflex.Var>" in val:
+            val = val.split("</reflex.Var>")[-1]
+        return val
+    except:
+        pass
+        
+    # Si todo falla, devolvemos el valor por defecto
+    return default
+
+
+def get_safe_var_list(var_list, default=None):
+    """
+    Obtiene de manera segura los valores de una lista reactiva de Reflex.
+    Convierte la lista reactiva a una lista Python estándar.
+    
+    Args:
+        var_list: Lista reactiva de Reflex
+        default: Valor por defecto si no se puede obtener la lista ([] por defecto)
+        
+    Returns:
+        Una lista Python estándar con los valores de la lista reactiva
+    """
+    if default is None:
+        default = []
+        
+    if var_list is None:
+        print("DEBUG: var_list es None, devolviendo lista por defecto")
+        return default
+        
+    result = default
+    error_found = False
+    
+    # Método 1: Acceder directamente a _var_value
+    try:
+        if hasattr(var_list, "_var_value"):
+            val = var_list._var_value
+            if isinstance(val, list):
+                print(f"DEBUG: Lista obtenida via _var_value con {len(val)} elementos")
+                return val
+    except Exception as e:
+        print(f"DEBUG: Error al acceder a _var_value: {e}")
+        error_found = True
+        
+    # Método 2: Acceder a los elementos individuales, que luego podemos combinar en una lista
+    try:
+        # Intentamos acceder al primer elemento para ver si podemos iterar
+        first_item = var_list[0]
+        # Si llegamos aquí, podemos intentar construir la lista elemento por elemento
+        items = []
+        i = 0
+        try:
+            # Vamos accediendo a elementos hasta que falle
+            while True:
+                item = var_list[i]
+                if hasattr(item, "_var_value"):
+                    items.append(item._var_value)
+                else:
+                    items.append(item)
+                i += 1
+        except IndexError:
+            # Llegamos al final de la lista
+            pass
+        except Exception as e:
+            print(f"DEBUG: Error al iterar elemento {i}: {e}")
+            
+        if items:
+            print(f"DEBUG: Lista construida elemento por elemento con {len(items)} elementos")
+            return items
+    except Exception as e:
+        print(f"DEBUG: Error accediendo al primer elemento: {e}")
+        error_found = True
+        
+    # Método 3: Intentar convertir a lista explícitamente
+    try:
+        val = list(var_list)
+        if isinstance(val, list) and val:
+            print(f"DEBUG: Lista obtenida via list() con {len(val)} elementos")
+            return val
+    except Exception as e:
+        print(f"DEBUG: Error al convertir con list(): {e}")
+        error_found = True
+        
+    # Método 4: Intentar obtener como dict y verificar si es una lista
+    try:
+        if hasattr(var_list, "to_dict"):
+            val = var_list.to_dict()
+            if isinstance(val, list):
+                print(f"DEBUG: Lista obtenida via to_dict() con {len(val)} elementos")
+                return val
+    except Exception as e:
+        print(f"DEBUG: Error al obtener via to_dict(): {e}")
+        error_found = True
+        
+    # Método 5: Último recurso, evaluar la representación como string
+    try:
+        str_val = str(var_list)
+        if str_val.startswith("[") and str_val.endswith("]"):
+            import ast
+            try:
+                # Intentar interpretar como una lista literal de Python
+                parsed_list = ast.literal_eval(str_val)
+                if isinstance(parsed_list, list):
+                    print(f"DEBUG: Lista obtenida via ast.literal_eval con {len(parsed_list)} elementos")
+                    return parsed_list
+            except:
+                pass
+    except Exception as e:
+        print(f"DEBUG: Error evaluando string representation: {e}")
+        error_found = True
+    
+    if error_found:
+        print(f"DEBUG: No se pudo obtener la lista reactiva después de varios intentos, retornando {default}")
+    
+    # Si todo falla, devolvemos la lista vacía o el valor por defecto
+    return default
+
+
+# --- IMPORTACIONES DE SUB-ESTADOS ---
+# Importar CuestionarioState para poder obtener su instancia
+try:
+    from .cuestionario import CuestionarioState
+except ImportError:
+    CuestionarioState = None # Handle case where file might not exist yet
+
+# --- CONSTANTES ---
+PRIMARY_COLOR_SCHEME = "blue"
+ACCENT_COLOR_SCHEME = "amber"
+FONT_FAMILY = "Poppins, sans-serif"
+GOOGLE_FONT_STYLESHEET = [
+    "https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap"
+]
+# --- FIN CONSTANTES ---
+
+
+# --- FUNCIONES HELPER ---
+def _curso_sort_key(curso: str) -> tuple:
+    try:
+        num_str = curso.split()[0]
+        sufijos = ["ro", "do", "to", "vo", "mo"]
+        for sufijo in sufijos:
+            num_str = num_str.replace(sufijo, "")
+        num = int(num_str) if num_str.isdigit() else 99
+        nivel = "1" if "Básico" in curso else "2" if "Medio" in curso else "9"
+        return (nivel, num)
+    except Exception as e:
+        print(f"Error en _curso_sort_key para '{curso}': {e}")
+        return ("9", 99)
+
+def error_callout(message: rx.Var[str]):
+    """Componente UI para mostrar errores."""
+    return rx.cond(
+        message != "",
+        rx.callout.root(
+            rx.callout.icon(rx.icon("triangle-alert")),
+            rx.callout.text(message),
+            color_scheme="red",
+            role="alert",
+            w="100%",
+            my="1em",
+            size="2",
+        ),
+    )
+# --- FIN FUNCIONES HELPER ---
+
+
+# --- ESTADO CENTRAL: AppState ---
+class AppState(rx.State):
+    """Estado central de la aplicación SMART_STUDENT Web."""
+    
+    @classmethod
+    def get_instance(cls):
+        """Obtiene una instancia del estado principal para acceder desde subclases."""
+        # Primero intentamos obtener la instancia principal (no subclase)
+        for state in rx.State._get_current_app().state_manager._states.values():
+            if type(state) == AppState:  # Solo coincidencia exacta, no subclases
+                return state
+        
+        # Si no encontramos la instancia principal, buscamos cualquier instancia de AppState
+        for state in rx.State._get_current_app().state_manager._states.values():
+            if isinstance(state, AppState) and not isinstance(state, (CuestionarioState)):
+                return state
+        return None
+
+    # Autenticación / Usuario
+    username_input: str = ""
+    password_input: str = ""
+    is_logged_in: bool = False
+    login_error_message: str = ""
+    logged_in_username: str = ""
+    
+    # Language settings
+    current_language: str = "es"  # Default language is Spanish
+    
+    def toggle_language(self) -> rx.event.EventSpec:
+        """Cambia entre español e inglés y guarda la preferencia."""
+        if self.current_language == "es":
+            self.current_language = "en"
+        else:
+            self.current_language = "es"
+        
+        # Guardar preferencia en el almacenamiento local del navegador
+        rx.client_side("localStorage.setItem('smart_student_language', '" + self.current_language + "');")
+        return rx.event.EventSpec(callback=None)
+        
+    def load_language_preference(self) -> rx.event.EventSpec:
+        """Carga la preferencia de idioma guardada en el navegador."""
+        # Carga la preferencia del almacenamiento local
+        return rx.event.EventSpec(
+            callback=rx.client_side("""
+                const savedLang = localStorage.getItem('smart_student_language');
+                if (savedLang === 'en' || savedLang === 'es') {
+                    return { current_language: savedLang };
+                }
+                return {};
+            """)
+        )
+    
+    # Contadores de actividades
+    resumenes_generados_count: int = 0  # Contador de resúmenes generados
+    mapas_creados_count: int = 0  # Contador de mapas creados
+
+    # Selección de Contenido
+    try:
+        _cursos_data = getattr(config_logic, "CURSOS", {})
+        cursos_dict: Dict[str, Any] = _cursos_data if isinstance(_cursos_data, dict) else {}
+        cursos_list: List[str] = sorted(
+            [str(c) for c in cursos_dict.keys() if isinstance(c, str) and c != "Error"],
+            key=_curso_sort_key,
+        )
+    except Exception as e:
+        print(f"ERROR Cargando CURSOS al inicializar estado: {e}", file=sys.stderr)
+        cursos_dict: Dict[str, Any] = {"Error": {"Carga": "error.pdf"}}
+        cursos_list: List[str] = ["Error al Cargar Cursos"]
+
+    selected_curso: str = ""
+    selected_libro: str = ""
+    selected_tema: str = ""
+
+    # Estados Funcionalidades (Generales)
+    is_generating_resumen: bool = False
+    resumen_content: str = ""
+    puntos_content: str = ""
+    include_puntos: bool = False
+    is_generating_mapa: bool = False
+    mapa_mermaid_code: str = ""
+    mapa_image_url: str = ""
+    mapa_orientacion_horizontal: bool = True
+    is_loading_stats: bool = False
+    is_loading_profile_data: bool = False  # Added missing attribute
+    stats_history: List[Dict[str, Any]] = []
+    error_message_ui: str = ""
+    active_tab: str = "inicio"
+    
+    # Paginación de historial de evaluaciones
+    historial_evaluaciones_pagina_actual: int = 1
+    historial_evaluaciones_por_pagina: int = 10
+    
+    # Estado para la pestaña de ayuda
+    ayuda_search_query: str = ""
+    show_contact_form: bool = False
+    ayuda_pregunta_abierta: int = -1  # Índice de la pregunta abierta (-1 significa ninguna abierta)
+    
+    # Preguntas hardcodeadas para usar solo si algo falla con la carga dinámica
+    _default_help_questions: List[Dict[str, str]] = []
+    
+    @rx.var
+    def ayuda_preguntas_respuestas(self) -> List[Dict[str, str]]:
+        """
+        Devuelve las preguntas de ayuda en el idioma actual.
+        Usa get_help_questions para obtener las traducciones adecuadas.
+        """
+        try:
+            return get_help_questions(self.current_language)
+        except Exception as e:
+            print(f"ERROR: No se pudieron cargar las preguntas de ayuda: {e}")
+            return self._default_help_questions
+
+    # --- Computed Vars ---
+    @rx.var
+    def libros_para_curso(self) -> List[str]:
+        if not self.selected_curso or self.selected_curso == "Error al Cargar Cursos":
+            return []
+        try:
+            return list(self.cursos_dict.get(self.selected_curso, {}).keys())
+        except Exception as e:
+            print(f"Error obteniendo libros: {e}")
+            return []
+
+    @rx.var
+    def pdf_url(self) -> str:
+        if not self.selected_curso or not self.selected_libro:
+            return ""
+        try:
+            curso = self.selected_curso.lower().replace(" ", "_")
+            archivo = self.cursos_dict[self.selected_curso][self.selected_libro]
+            return f"/pdfs/{curso}/{archivo}"
+        except Exception as e:
+            print(f"ERROR generando URL PDF: {e}")
+            return ""
+            
+    @rx.var
+    def user_stats(self) -> List[Dict[str, Any]]:
+        """Obtiene las estadísticas del usuario para mostrar en la pestaña de perfil."""
+        if not self.logged_in_username or not BACKEND_AVAILABLE:
+            # Mock data para demostración cuando no hay backend o usuario
+            return [
+                {
+                    "nombre": "Examen Final",
+                    "curso": "Historia",
+                    "libro": "Historia universal tomo 1",
+                    "tema": "La Edad Media",
+                    "puntuacion": 8.5,
+                    "fecha": "15/04/2024"
+                }
+            ]
+        
+        try:
+            if not hasattr(db_logic, "obtener_estadisticas_usuario"):
+                print("WARN: No se encontró la función obtener_estadisticas_usuario")
+                return []
+                
+            stats_raw = db_logic.obtener_estadisticas_usuario(self.logged_in_username)
+            
+            # Handle different return types
+            if isinstance(stats_raw, list):
+                stats = stats_raw
+            elif isinstance(stats_raw, dict):
+                print(f"INFO: Convirtiendo estadísticas de diccionario a lista: {stats_raw}")
+                # If it's a dictionary with items, convert it to a list of one item
+                if stats_raw:
+                    stats = [stats_raw]
+                else:
+                    stats = []
+            else:
+                print(f"WARN: Las estadísticas obtenidas no son ni lista ni diccionario: {type(stats_raw)}")
+                return []
+                
+            # Asegurarse de que cada ítem tenga todas las claves necesarias
+            formatted_stats = []
+            for stat in stats:
+                if isinstance(stat, dict):
+                    # Por defecto, usar 'Evaluación' como nombre si no está especificado
+                    if "nombre" not in stat:
+                        stat["nombre"] = "Examen Final"
+                    formatted_stats.append(stat)
+            
+            return formatted_stats
+        except Exception as e:
+            print(f"ERROR obteniendo estadísticas: {e}")
+            return []
+            
+    @rx.var
+    def promedio_calificaciones(self) -> str:
+        """Calcula el promedio de calificaciones del usuario para mostrar en la pestaña de perfil.
+        Solo considera las materias con valores mayores a 0%."""
+        
+        # Obtener los progresos de cada materia
+        progress_values = [
+            self.matematicas_progress,
+            self.ciencias_progress,
+            self.historia_progress,
+            self.lenguaje_progress
+        ]
+        
+        # Filtrar valores mayores a 0
+        valid_progress = [value for value in progress_values if value > 0]
+        
+        # Si no hay ningún valor válido, devolver 0.0
+        if not valid_progress:
+            return "0.0"
+        
+        # Calcular el promedio de los valores válidos
+        promedio = sum(valid_progress) / len(valid_progress)
+        return f"{promedio:.1f}"
+    
+    @rx.var
+    def stats_count(self) -> int:
+        """Devuelve el número de evaluaciones realizadas por el usuario."""
+        if not self.stats_history:
+            return 0
+        return len(self.stats_history)
+        
+    @rx.var
+    def contar_mapas_creados(self) -> int:
+        """Cuenta el número de mapas conceptuales creados por el usuario actual."""
+        if not self.logged_in_username or not BACKEND_AVAILABLE:
+            return 0
+            
+        try:
+            # Usamos el contador directo de mapas creados
+            if hasattr(self, "mapas_creados_count") and isinstance(self.mapas_creados_count, int):
+                return self.mapas_creados_count
+            
+            # Fallback al método anterior si el contador no está disponible
+            # Verificar si la carpeta de mapas existe
+            mapas_dir = os.path.join("assets", "mapas")
+            if not os.path.exists(mapas_dir) or not os.path.isdir(mapas_dir):
+                print("WARN: Directorio de mapas no encontrado")
+                return 0
+                
+            # Contar archivos .mmd en la carpeta de mapas
+            # Por simplicidad, contamos todos los mapas para el usuario actual
+            # En una implementación más completa, habría que filtrar por usuario
+            map_files = [f for f in os.listdir(mapas_dir) if f.endswith('.mmd')]
+            return len(map_files)
+        except Exception as e:
+            print(f"ERROR contando mapas: {e}")
+            return 0
+            
+    @rx.var
+    def contar_resumenes_generados(self) -> int:
+        """Cuenta el número de resúmenes generados por el usuario actual."""
+        if not self.logged_in_username or not BACKEND_AVAILABLE:
+            return 0
+            
+        try:
+            # Usamos el contador directo de resúmenes generados
+            if hasattr(self, "resumenes_generados_count") and isinstance(self.resumenes_generados_count, int):
+                # Usamos el contador real más el valor base
+                return self.resumenes_generados_count + 3  # +3 por resúmenes básicos iniciales
+                
+            # Fallback al método anterior si el contador no está disponible
+            if self.stats_history and isinstance(self.stats_history, list):
+                # Contamos cuántas evaluaciones diferentes por tema hay
+                temas_unicos = set()
+                for eval_item in self.stats_history:
+                    if isinstance(eval_item, dict) and "tema" in eval_item:
+                        temas_unicos.add(eval_item["tema"])
+                
+                # Asumimos que cada tema evaluado tiene un resumen generado
+                return len(temas_unicos) + 3  # +3 por resúmenes básicos iniciales
+            
+            # Fallback si stats_history no está disponible
+            # Usamos estadísticas básicas - aproximadamente la mitad + 3 básicos
+            stats = db_logic.obtener_estadisticas_usuario(self.logged_in_username)
+            if isinstance(stats, dict) and "total_evaluaciones" in stats:
+                return max(3, stats["total_evaluaciones"] // 2 + 3)  # Estimación simple
+            
+            # Si todo falla, mostramos un valor razonable por defecto
+            return 5
+        except Exception as e:
+            print(f"ERROR contando resúmenes: {e}")
+            return 3
+        
+    @rx.var
+    def historial_evaluaciones_paginado(self) -> List[Dict[str, Any]]:
+        """Retorna una página del historial de evaluaciones para la vista de perfil."""
+        if not self.stats_history:
+            return []
+            
+        # Calcular índices de inicio y fin para la paginación
+        inicio = (self.historial_evaluaciones_pagina_actual - 1) * self.historial_evaluaciones_por_pagina
+        fin = inicio + self.historial_evaluaciones_por_pagina
+        
+        # Devolver la porción correspondiente a la página actual
+        evaluaciones_pagina = self.stats_history[inicio:fin]
+        
+        # Asegurar que cada evaluación tenga todos los campos necesarios para la UI
+        for evaluacion in evaluaciones_pagina:
+            # Formatear la fecha para mostrar en hora local y formato amigable
+            if "fecha" in evaluacion and evaluacion["fecha"]:
+                try:
+                    # Verificar si la fecha ya está en formato DD-MM-YYYY
+                    fecha_str = evaluacion["fecha"]
+                    if "-" in fecha_str and len(fecha_str.split("-")[0]) == 2:
+                        # Ya está en formato local, no hacer nada
+                        pass
+                    else:
+                        try:
+                            # Convertir el string ISO a objeto datetime
+                            fecha_dt = datetime.datetime.strptime(fecha_str, "%Y-%m-%d %H:%M:%S")
+                            
+                            # Ajustar la hora (-4 horas para Chile/Santiago)
+                            fecha_local = fecha_dt - datetime.timedelta(hours=4)
+                            
+                            # Formatear para mostrar en formato militar (24 horas)
+                            evaluacion["fecha"] = fecha_local.strftime("%d-%m-%Y %H:%M hrs")
+                        except Exception as e:
+                            print(f"Error al formatear fecha: {e}")
+                            # Si hay un error, usar el formato original
+                            evaluacion["fecha"] = fecha_str
+                except Exception as e:
+                    # Si hay un error, mantener el formato original
+                    print(f"ERROR: No se pudo formatear la fecha {evaluacion.get('fecha')}: {e}")
+                    
+            # Intentar extraer información de respuestas correctas del metadatos
+            if "metadata" in evaluacion and evaluacion["metadata"]:
+                try:
+                    metadata = evaluacion["metadata"]
+                    print(f"DEBUG: Procesando metadata: '{metadata}'")
+                    if "Correctas:" in metadata:
+                        # Formato esperado: "Correctas: X/Y"
+                        correctas_part = metadata.split("Correctas:")[1].strip()
+                        if "/" in correctas_part:
+                            correctas, total = correctas_part.split("/")
+                            evaluacion["respuestas_correctas"] = int(correctas)
+                            evaluacion["total_preguntas"] = int(total)
+                            print(f"DEBUG: Extraídas respuestas_correctas={correctas}/{total} de metadata")
+                except Exception as e:
+                    print(f"ERROR: No se pudo extraer metadata {evaluacion.get("metadata")}: {e}")
+            
+            # Asegurarse que tenemos campos consistentes (algunos pueden venir como calificacion, otros como nota)
+            if "calificacion" not in evaluacion and "puntuacion" in evaluacion:
+                try:
+                    # Garantizar que la puntuación esté en el rango 0-100%
+                    puntuacion = float(evaluacion["puntuacion"])
+                    evaluacion["calificacion"] = max(0, min(100, round(puntuacion)))
+                except (ValueError, TypeError):
+                    evaluacion["calificacion"] = 0
+            elif "calificacion" not in evaluacion and "nota" in evaluacion:
+                try:
+                    # Convertir nota del sistema 1.0-7.0 de vuelta a porcentaje 0-100%
+                    nota = float(evaluacion["nota"])
+                    if nota <= 1.0:  # Si la nota es menor o igual a 1.0, sabemos que es 0%
+                        evaluacion["calificacion"] = 0
+                    else:
+                        # Aplicar fórmula inversa: porcentaje = (nota - 1.0) / 6.0 * 100
+                        porcentaje = int((nota * 100) / 7.0)
+                        # Garantizar que el porcentaje esté en el rango 0-100%
+                        evaluacion["calificacion"] = max(0, min(100, porcentaje))
+                        print(f"DEBUG: Convertida nota {nota} a porcentaje {porcentaje}%")
+                except (ValueError, TypeError) as e:
+                    print(f"ERROR: No se pudo convertir nota {evaluacion.get('nota')}: {e}")
+                    evaluacion["calificacion"] = 0
+            elif "calificacion" not in evaluacion:
+                evaluacion["calificacion"] = 0
+                
+            # Asegurarse que calificación sea un número válido entre 0-100
+            try:
+                if "calificacion" in evaluacion:
+                    evaluacion["calificacion"] = max(0, min(100, round(float(evaluacion["calificacion"]))))
+                    
+                    # Si tiene respuestas_correctas en 0, entonces la calificación debe ser 0%
+                    if "respuestas_correctas" in evaluacion and evaluacion["respuestas_correctas"] == 0 and evaluacion["total_preguntas"] > 0:
+                        evaluacion["calificacion"] = 0
+                        
+                # Recalcular porcentaje de calificación si tenemos respuestas_correctas y total_preguntas
+                if ("respuestas_correctas" in evaluacion and 
+                    "total_preguntas" in evaluacion and 
+                    evaluacion["total_preguntas"] > 0):
+                    # Calcular correctamente el porcentaje como (correctas / total) * 100
+                    porcentaje_correcto = round((evaluacion["respuestas_correctas"] / evaluacion["total_preguntas"]) * 100)
+                    # Actualizar la calificación con el porcentaje correcto
+                    evaluacion["calificacion"] = porcentaje_correcto
+                    print(f"DEBUG: Recalculado porcentaje: {evaluacion['respuestas_correctas']}/{evaluacion['total_preguntas']} = {porcentaje_correcto}%")
+                        
+                # Asegurar formato de puntuación para mostrar en UI (Ej: 95 -> "95%")
+                if "puntuacion" in evaluacion and isinstance(evaluacion["puntuacion"], (int, float)):
+                    # Si la puntuación no tiene el símbolo %, añadirlo
+                    if not str(evaluacion["puntuacion"]).endswith('%'):
+                        evaluacion["puntuacion_display"] = f"{evaluacion['puntuacion']}%"
+                    else:
+                        evaluacion["puntuacion_display"] = str(evaluacion["puntuacion"])
+                elif "calificacion" in evaluacion:
+                    evaluacion["puntuacion_display"] = f"{evaluacion['calificacion']}%"
+                else:
+                    evaluacion["puntuacion_display"] = "0%"
+                    
+                # Manejar el caso de "0/0" puntos
+                if "respuestas_correctas" in evaluacion and "total_preguntas" in evaluacion:
+                    # Solo ajustar si tenemos una puntuación válida pero no hay preguntas registradas
+                    if evaluacion["total_preguntas"] == 0 and evaluacion.get("calificacion", 0) > 0:
+                        # Estimamos el número total de preguntas basado en el porcentaje
+                        # Asumimos un estándar de 10 preguntas para evaluaciones sin datos detallados
+                        evaluacion["total_preguntas"] = 10
+                        # Calculamos respuestas correctas basado en la calificación
+                        evaluacion["respuestas_correctas"] = round(evaluacion["total_preguntas"] * evaluacion["calificacion"] / 100)
+            except (ValueError, TypeError):
+                evaluacion["calificacion"] = 0
+                evaluacion["puntuacion_display"] = "0%"
+                
+            # Asegurar que tenemos conteo de respuestas para mostrar en UI
+            if "respuestas_correctas" not in evaluacion:
+                evaluacion["respuestas_correctas"] = 0
+            if "total_preguntas" not in evaluacion:
+                evaluacion["total_preguntas"] = 0
+                
+        return evaluaciones_pagina
+
+    # --- Book Progress Variables ---
+    @rx.var
+    def matematicas_progress(self) -> int:
+        """Retorna el progreso (porcentaje) más alto obtenido en evaluaciones de Matemáticas."""
+        if not self.stats_history:
+            # Si no hay historial, mostramos 0%
+            return 0
+        
+        # Buscar evaluaciones relacionadas con matemáticas
+        matematicas_evaluaciones = []
+        for eval_item in self.stats_history:
+            if not isinstance(eval_item, dict):
+                continue
+                
+            # Verificar si es una evaluación de matemáticas por el nombre del libro/curso
+            is_matematicas = False
+            
+            # Verificar en el libro
+            libro = eval_item.get("libro", "").lower() if isinstance(eval_item.get("libro", ""), str) else ""
+            if libro and any(term in libro for term in ["mat", "matemática", "álgebra", "geometría", "aritmética", "cálculo"]):
+                is_matematicas = True
+                
+            # Verificar en el curso si aún no se ha detectado
+            if not is_matematicas:
+                curso = eval_item.get("curso", "").lower() if isinstance(eval_item.get("curso", ""), str) else ""
+                if curso and any(term in curso for term in ["mat", "matemática", "álgebra"]):
+                    is_matematicas = True
+                    
+            # Verificar en el tema si aún no se ha detectado
+            if not is_matematicas:
+                tema = eval_item.get("tema", "").lower() if isinstance(eval_item.get("tema", ""), str) else ""
+                if tema and any(term in tema for term in ["mat", "matemática", "álgebra", "geometría", "aritmética", "número", "ecuación", "función", "cálculo", "trigonometría"]):
+                    is_matematicas = True
+            
+            if is_matematicas:
+                matematicas_evaluaciones.append(eval_item)
+                print(f"DEBUG: Evaluación de matemáticas encontrada: {eval_item.get('tema')} - {eval_item.get('calificacion')}%")
+        
+        if not matematicas_evaluaciones:
+            # Si no hay evaluaciones específicas de matemáticas, retornar 0%
+            return 0
+            
+        # Extraer las calificaciones
+        calificaciones = []
+        for eval_item in matematicas_evaluaciones:
+            # Primero intentamos usar la calificación calculada
+            if "calificacion" in eval_item:
+                try:
+                    calificacion = float(eval_item["calificacion"])
+                    calificaciones.append(calificacion)
+                    print(f"DEBUG: Añadida calificación: {calificacion}%")
+                except (ValueError, TypeError):
+                    pass
+            # Si no hay calificación, intentamos con puntuacion
+            elif "puntuacion" in eval_item:
+                try:
+                    puntuacion_str = str(eval_item["puntuacion"])
+                    # Eliminar el símbolo % si existe
+                    puntuacion_str = puntuacion_str.replace("%", "").strip()
+                    puntuacion = float(puntuacion_str)
+                    calificaciones.append(puntuacion)
+                    print(f"DEBUG: Añadida puntuación: {puntuacion}%")
+                except (ValueError, TypeError):
+                    pass
+            # Si hay nota en escala 1-7, convertirla a porcentaje
+            elif "nota" in eval_item:
+                try:
+                    nota = float(eval_item["nota"])
+                    # Verificar si la nota está en escala 1.0-7.0 (sistema chileno)
+                    if 1.0 <= nota <= 7.0:
+                        # Convertir a porcentaje (1.0 = 0%, 7.0 = 100%)
+                        porcentaje = ((nota - 1.0) / 6.0) * 100
+                        calificaciones.append(porcentaje)
+                        print(f"DEBUG: Añadida nota convertida: {nota} -> {porcentaje}%")
+                    else:
+                        # Asumir que ya es un porcentaje
+                        calificaciones.append(nota)
+                        print(f"DEBUG: Añadida nota como porcentaje: {nota}%")
+                except (ValueError, TypeError):
+                    pass
+            # O intentamos recalcular a partir de respuestas correctas
+            elif "respuestas_correctas" in eval_item and "total_preguntas" in eval_item and eval_item["total_preguntas"] > 0:
+                try:
+                    correctas = int(eval_item["respuestas_correctas"])
+                    total = int(eval_item["total_preguntas"])
+                    porcentaje = round((correctas / total) * 100)
+                    calificaciones.append(porcentaje)
+                    print(f"DEBUG: Añadida calificación calculada: {correctas}/{total} = {porcentaje}%")
+                except (ValueError, TypeError, ZeroDivisionError):
+                    pass
+            # Si hay metadata con información de respuestas correctas
+            elif "metadata" in eval_item and eval_item["metadata"]:
+                try:
+                    metadata = eval_item["metadata"]
+                    if "Correctas:" in metadata:
+                        # Formato esperado: "Correctas: X/Y"
+                        correctas_part = metadata.split("Correctas:")[1].strip()
+                        if "/" in correctas_part:
+                            correctas, total = correctas_part.split("/")
+                            correctas = int(correctas)
+                            total = int(total)
+                            if total > 0:
+                                porcentaje = (correctas / total) * 100
+                                calificaciones.append(porcentaje)
+                                print(f"DEBUG: Añadida calificación desde metadata: {correctas}/{total} = {porcentaje}%")
+                except Exception:
+                    pass
+        
+        # Si no pudimos extraer ninguna calificación, retornar 0%
+        if not calificaciones:
+            return 0
+                
+        # Devolver la calificación más alta
+        mejor_calificacion = max(calificaciones)
+        print(f"DEBUG: Mejor calificación: {mejor_calificacion}%")
+        return round(mejor_calificacion)
+        
+    @rx.var
+    def ciencias_progress(self) -> int:
+        """Retorna el progreso (porcentaje) más alto obtenido en evaluaciones de Ciencias."""
+        if not self.stats_history:
+            # Si no hay historial, mostramos 0%
+            return 0
+        
+        # Buscar evaluaciones relacionadas con ciencias
+        ciencias_evaluaciones = []
+        for eval_item in self.stats_history:
+            if not isinstance(eval_item, dict):
+                continue
+                
+            # Verificar si es una evaluación de ciencias por el nombre del libro/curso/tema
+            is_ciencias = False
+            
+            # Verificar en el libro
+            libro = eval_item.get("libro", "").lower() if isinstance(eval_item.get("libro", ""), str) else ""
+            if libro and any(term in libro for term in ["cien", "biología", "biolog", "química", "quimic", "física", "fisic", "natural", "ecología", "ecolog", "ambiente"]):
+                is_ciencias = True
+                
+            # Verificar en el curso si aún no se ha detectado
+            if not is_ciencias:
+                curso = eval_item.get("curso", "").lower() if isinstance(eval_item.get("curso", ""), str) else ""
+                if curso and any(term in curso for term in ["cien", "biología", "biolog", "química", "quimic", "física", "fisic", "natural"]):
+                    is_ciencias = True
+                    
+            # Verificar en el tema si aún no se ha detectado
+            if not is_ciencias:
+                tema = eval_item.get("tema", "").lower() if isinstance(eval_item.get("tema", ""), str) else ""
+                if tema and any(term in tema for term in ["cien", "célula", "celula", "biolog", "quimic", "fisic", "natural", "quánt", "átomo", "atomo", "molécula", "molecula", "genética", "tejido", "fuerza", "energía", "planeta", "sistema", "fotosíntesis", "fotosintesis"]):
+                    is_ciencias = True
+            
+            if is_ciencias:
+                ciencias_evaluaciones.append(eval_item)
+                print(f"DEBUG: Evaluación de ciencias encontrada: {eval_item.get('tema')} - {eval_item.get('calificacion')}%")
+        
+        if not ciencias_evaluaciones:
+            # Si no hay evaluaciones específicas de ciencias, retornar 0%
+            return 0
+            
+        # Extraer las calificaciones
+        calificaciones = []
+        for eval_item in ciencias_evaluaciones:
+            # Primero intentamos usar la calificación calculada
+            if "calificacion" in eval_item:
+                try:
+                    calificacion = float(eval_item["calificacion"])
+                    calificaciones.append(calificacion)
+                    print(f"DEBUG: Añadida calificación: {calificacion}%")
+                except (ValueError, TypeError):
+                    pass
+            # Si no hay calificación, intentamos con puntuacion
+            elif "puntuacion" in eval_item:
+                try:
+                    puntuacion_str = str(eval_item["puntuacion"])
+                    # Eliminar el símbolo % si existe
+                    puntuacion_str = puntuacion_str.replace("%", "").strip()
+                    puntuacion = float(puntuacion_str)
+                    calificaciones.append(puntuacion)
+                    print(f"DEBUG: Añadida puntuación: {puntuacion}%")
+                except (ValueError, TypeError):
+                    pass
+            # Si hay nota en escala 1-7, convertirla a porcentaje
+            elif "nota" in eval_item:
+                try:
+                    nota = float(eval_item["nota"])
+                    # Verificar si la nota está en escala 1.0-7.0 (sistema chileno)
+                    if 1.0 <= nota <= 7.0:
+                        # Convertir a porcentaje (1.0 = 0%, 7.0 = 100%)
+                        porcentaje = ((nota - 1.0) / 6.0) * 100
+                        calificaciones.append(porcentaje)
+                        print(f"DEBUG: Añadida nota convertida: {nota} -> {porcentaje}%")
+                    else:
+                        # Asumir que ya es un porcentaje
+                        calificaciones.append(nota)
+                        print(f"DEBUG: Añadida nota como porcentaje: {nota}%")
+                except (ValueError, TypeError):
+                    pass
+            # O intentamos recalcular a partir de respuestas correctas
+            elif "respuestas_correctas" in eval_item and "total_preguntas" in eval_item and eval_item["total_preguntas"] > 0:
+                try:
+                    correctas = int(eval_item["respuestas_correctas"])
+                    total = int(eval_item["total_preguntas"])
+                    porcentaje = round((correctas / total) * 100)
+                    calificaciones.append(porcentaje)
+                    print(f"DEBUG: Añadida calificación calculada: {correctas}/{total} = {porcentaje}%")
+                except (ValueError, TypeError, ZeroDivisionError):
+                    pass
+            # Si hay metadata con información de respuestas correctas
+            elif "metadata" in eval_item and eval_item["metadata"]:
+                try:
+                    metadata = eval_item["metadata"]
+                    if "Correctas:" in metadata:
+                        # Formato esperado: "Correctas: X/Y"
+                        correctas_part = metadata.split("Correctas:")[1].strip()
+                        if "/" in correctas_part:
+                            correctas, total = correctas_part.split("/")
+                            correctas = int(correctas)
+                            total = int(total)
+                            if total > 0:
+                                porcentaje = (correctas / total) * 100
+                                calificaciones.append(porcentaje)
+                                print(f"DEBUG: Añadida calificación desde metadata: {correctas}/{total} = {porcentaje}%")
+                except Exception:
+                    pass
+        
+        # Si no pudimos extraer ninguna calificación, retornar 0%
+        if not calificaciones:
+            return 0
+                
+        # Devolver la calificación más alta
+        mejor_calificacion = max(calificaciones)
+        print(f"DEBUG: Mejor calificación en ciencias: {mejor_calificacion}%")
+        return round(mejor_calificacion)
+
+    @rx.var
+    def historia_progress(self) -> int:
+        """Retorna el progreso (porcentaje) más alto obtenido en evaluaciones de Historia."""
+        if not self.stats_history:
+            # Si no hay historial, mostramos 0%
+            return 0
+        
+        # Buscar evaluaciones relacionadas con historia
+        historia_evaluaciones = []
+        for eval_item in self.stats_history:
+            if not isinstance(eval_item, dict):
+                continue
+                
+            # Verificar si es una evaluación de historia por el nombre del libro/curso/tema
+            is_historia = False
+            
+            # Verificar en el libro
+            libro = eval_item.get("libro", "").lower() if isinstance(eval_item.get("libro", ""), str) else ""
+            if libro and any(term in libro for term in ["hist", "geograf", "social", "civiliz", "mundo", "socied", "cultura"]):
+                is_historia = True
+                
+            # Verificar en el curso si aún no se ha detectado
+            if not is_historia:
+                curso = eval_item.get("curso", "").lower() if isinstance(eval_item.get("curso", ""), str) else ""
+                if curso and any(term in curso for term in ["hist", "geograf", "social", "socied"]):
+                    is_historia = True
+                    
+            # Verificar en el tema si aún no se ha detectado
+            if not is_historia:
+                tema = eval_item.get("tema", "").lower() if isinstance(eval_item.get("tema", ""), str) else ""
+                if tema and any(term in tema for term in ["hist", "geograf", "social", "cultur", "edad media", "siglo", "guerra", "revoluci", "civiliz", "imperio", "antiguo", "politica", "polític", "gobierno", "democracia", "independencia"]):
+                    is_historia = True
+            
+            if is_historia:
+                historia_evaluaciones.append(eval_item)
+                print(f"DEBUG: Evaluación de historia encontrada: {eval_item.get('tema')} - {eval_item.get('calificacion')}%")
+        
+        if not historia_evaluaciones:
+            # Si no hay evaluaciones específicas de historia, retornar 0%
+            return 0
+            
+        # Extraer las calificaciones
+        calificaciones = []
+        for eval_item in historia_evaluaciones:
+            # Primero intentamos usar la calificación calculada
+            if "calificacion" in eval_item:
+                try:
+                    calificacion = float(eval_item["calificacion"])
+                    calificaciones.append(calificacion)
+                    print(f"DEBUG: Añadida calificación: {calificacion}%")
+                except (ValueError, TypeError):
+                    pass
+            # Si no hay calificación, intentamos con puntuacion
+            elif "puntuacion" in eval_item:
+                try:
+                    puntuacion_str = str(eval_item["puntuacion"])
+                    # Eliminar el símbolo % si existe
+                    puntuacion_str = puntuacion_str.replace("%", "").strip()
+                    puntuacion = float(puntuacion_str)
+                    calificaciones.append(puntuacion)
+                    print(f"DEBUG: Añadida puntuación: {puntuacion}%")
+                except (ValueError, TypeError):
+                    pass
+            # Si hay nota en escala 1-7, convertirla a porcentaje
+            elif "nota" in eval_item:
+                try:
+                    nota = float(eval_item["nota"])
+                    # Verificar si la nota está en escala 1.0-7.0 (sistema chileno)
+                    if 1.0 <= nota <= 7.0:
+                        # Convertir a porcentaje (1.0 = 0%, 7.0 = 100%)
+                        porcentaje = ((nota - 1.0) / 6.0) * 100
+                        calificaciones.append(porcentaje)
+                        print(f"DEBUG: Añadida nota convertida: {nota} -> {porcentaje}%")
+                    else:
+                        # Asumir que ya es un porcentaje
+                        calificaciones.append(nota)
+                        print(f"DEBUG: Añadida nota como porcentaje: {nota}%")
+                except (ValueError, TypeError):
+                    pass
+            # O intentamos recalcular a partir de respuestas correctas
+            elif "respuestas_correctas" in eval_item and "total_preguntas" in eval_item and eval_item["total_preguntas"] > 0:
+                try:
+                    correctas = int(eval_item["respuestas_correctas"])
+                    total = int(eval_item["total_preguntas"])
+                    porcentaje = round((correctas / total) * 100)
+                    calificaciones.append(porcentaje)
+                    print(f"DEBUG: Añadida calificación calculada: {correctas}/{total} = {porcentaje}%")
+                except (ValueError, TypeError, ZeroDivisionError):
+                    pass
+            # Si hay metadata con información de respuestas correctas
+            elif "metadata" in eval_item and eval_item["metadata"]:
+                try:
+                    metadata = eval_item["metadata"]
+                    if "Correctas:" in metadata:
+                        # Formato esperado: "Correctas: X/Y"
+                        correctas_part = metadata.split("Correctas:")[1].strip()
+                        if "/" in correctas_part:
+                            correctas, total = correctas_part.split("/")
+                            correctas = int(correctas)
+                            total = int(total)
+                            if total > 0:
+                                porcentaje = (correctas / total) * 100
+                                calificaciones.append(porcentaje)
+                                print(f"DEBUG: Añadida calificación desde metadata: {correctas}/{total} = {porcentaje}%")
+                except Exception:
+                    pass
+        
+        # Si no pudimos extraer ninguna calificación, retornar 0%
+        if not calificaciones:
+            return 0
+                
+        # Devolver la calificación más alta
+        mejor_calificacion = max(calificaciones)
+        print(f"DEBUG: Mejor calificación en historia: {mejor_calificacion}%")
+        return round(mejor_calificacion)
+        
+    @rx.var
+    def lenguaje_progress(self) -> int:
+        """Retorna el progreso (porcentaje) más alto obtenido en evaluaciones de Lenguaje."""
+        if not self.stats_history:
+            # Si no hay historial, mostramos 0%
+            return 0
+        
+        # Buscar evaluaciones relacionadas con lenguaje
+        lenguaje_evaluaciones = []
+        for eval_item in self.stats_history:
+            if not isinstance(eval_item, dict):
+                continue
+                
+            # Verificar si es una evaluación de lenguaje por el nombre del libro/curso/tema
+            is_lenguaje = False
+            
+            # Verificar en el libro
+            libro = eval_item.get("libro", "").lower() if isinstance(eval_item.get("libro", ""), str) else ""
+            if libro and any(term in libro for term in ["lengu", "gram", "liter", "comunic", "español", "castellano", "lectura", "redacción"]):
+                is_lenguaje = True
+                
+            # Verificar en el curso si aún no se ha detectado
+            if not is_lenguaje:
+                curso = eval_item.get("curso", "").lower() if isinstance(eval_item.get("curso", ""), str) else ""
+                if curso and any(term in curso for term in ["lengu", "gram", "liter", "comunic", "español", "castellano"]):
+                    is_lenguaje = True
+                    
+            # Verificar en el tema si aún no se ha detectado
+            if not is_lenguaje:
+                tema = eval_item.get("tema", "").lower() if isinstance(eval_item.get("tema", ""), str) else ""
+                if tema and any(term in tema for term in ["lengu", "gram", "liter", "comunic", "texto", "narrativ", "poesía", "poesia", "ensayo", "novela", "cuento", "escrit", "verbal", "habla", "lectura", "ortografía", "ortografia", "redacción", "redaccion", "autor", "obra"]):
+                    is_lenguaje = True
+            
+            if is_lenguaje:
+                lenguaje_evaluaciones.append(eval_item)
+                print(f"DEBUG: Evaluación de lenguaje encontrada: {eval_item.get('tema')} - {eval_item.get('calificacion')}%")
+        
+        if not lenguaje_evaluaciones:
+            # Si no hay evaluaciones específicas de lenguaje, retornar 0%
+            return 0
+            
+        # Extraer las calificaciones
+        calificaciones = []
+        for eval_item in lenguaje_evaluaciones:
+            # Primero intentamos usar la calificación calculada
+            if "calificacion" in eval_item:
+                try:
+                    calificacion = float(eval_item["calificacion"])
+                    calificaciones.append(calificacion)
+                    print(f"DEBUG: Añadida calificación: {calificacion}%")
+                except (ValueError, TypeError):
+                    pass
+            # Si no hay calificación, intentamos con puntuacion
+            elif "puntuacion" in eval_item:
+                try:
+                    puntuacion_str = str(eval_item["puntuacion"])
+                    # Eliminar el símbolo % si existe
+                    puntuacion_str = puntuacion_str.replace("%", "").strip()
+                    puntuacion = float(puntuacion_str)
+                    calificaciones.append(puntuacion)
+                    print(f"DEBUG: Añadida puntuación: {puntuacion}%")
+                except (ValueError, TypeError):
+                    pass
+            # Si hay nota en escala 1-7, convertirla a porcentaje
+            elif "nota" in eval_item:
+                try:
+                    nota = float(eval_item["nota"])
+                    # Verificar si la nota está en escala 1.0-7.0 (sistema chileno)
+                    if 1.0 <= nota <= 7.0:
+                        # Convertir a porcentaje (1.0 = 0%, 7.0 = 100%)
+                        porcentaje = ((nota - 1.0) / 6.0) * 100
+                        calificaciones.append(porcentaje)
+                        print(f"DEBUG: Añadida nota convertida: {nota} -> {porcentaje}%")
+                    else:
+                        # Asumir que ya es un porcentaje
+                        calificaciones.append(nota)
+                        print(f"DEBUG: Añadida nota como porcentaje: {nota}%")
+                except (ValueError, TypeError):
+                    pass
+            # O intentamos recalcular a partir de respuestas correctas
+            elif "respuestas_correctas" in eval_item and "total_preguntas" in eval_item and eval_item["total_preguntas"] > 0:
+                try:
+                    correctas = int(eval_item["respuestas_correctas"])
+                    total = int(eval_item["total_preguntas"])
+                    porcentaje = round((correctas / total) * 100)
+                    calificaciones.append(porcentaje)
+                    print(f"DEBUG: Añadida calificación calculada: {correctas}/{total} = {porcentaje}%")
+                except (ValueError, TypeError, ZeroDivisionError):
+                    pass
+            # Si hay metadata con información de respuestas correctas
+            elif "metadata" in eval_item and eval_item["metadata"]:
+                try:
+                    metadata = eval_item["metadata"]
+                    if "Correctas:" in metadata:
+                        # Formato esperado: "Correctas: X/Y"
+                        correctas_part = metadata.split("Correctas:")[1].strip()
+                        if "/" in correctas_part:
+                            correctas, total = correctas_part.split("/")
+                            correctas = int(correctas)
+                            total = int(total)
+                            if total > 0:
+                                porcentaje = (correctas / total) * 100
+                                calificaciones.append(porcentaje)
+                                print(f"DEBUG: Añadida calificación desde metadata: {correctas}/{total} = {porcentaje}%")
+                except Exception:
+                    pass
+        
+        # Si no pudimos extraer ninguna calificación, retornar 0%
+        if not calificaciones:
+            return 0
+                
+        # Devolver la calificación más alta
+        mejor_calificacion = max(calificaciones)
+        print(f"DEBUG: Mejor calificación en lenguaje: {mejor_calificacion}%")
+        return round(mejor_calificacion)
+    # --- Fin Computed Vars ---
+
+    # --- Event Handlers ---
+    async def set_active_tab(self, tab: str):
+        if not isinstance(tab, str):
+            return
+        print(f"DEBUG: Navegando a tab '{tab}'. Selección actual: Curso='{self.selected_curso}', Libro='{self.selected_libro}', Tema='{self.selected_tema}'")
+
+        tab_anterior = self.active_tab
+
+        # Si cambiamos a la pestaña de perfil, cargar las estadísticas
+        if tab == "perfil":
+            print("DEBUG: Cambiando a pestaña de perfil, cargando estadísticas...")
+            async for _ in self.load_stats():
+                pass
+        
+        if tab != tab_anterior:
+            print(f"DEBUG: Cambiando de pestaña {tab_anterior} a {tab}, limpiando campos generales...")
+
+            # Reiniciar la selección de curso, libro y tema (general)
+            self.selected_curso = ""
+            self.selected_libro = ""
+            self.selected_tema = ""
+
+            # Limpiar contenido de resultados generales
+            self.error_message_ui = ""
+            self.resumen_content = ""
+            self.puntos_content = ""
+            self.include_puntos = False
+            self.mapa_image_url = ""
+            self.mapa_mermaid_code = ""
+            self.is_generating_resumen = False
+            self.is_generating_mapa = False
+
+            # Limpiar estado específico de evaluaciones si existe la clase
+            try:
+                from .evaluaciones import EvaluationState
+                if tab_anterior == "evaluacion":
+                    print("DEBUG: Reseteando EvaluationState...")
+                    eval_substate = await self.get_state(EvaluationState)
+                    if eval_substate and hasattr(eval_substate, "reset_evaluation_state"):
+                        print("DEBUG: Llamando a EvaluationState.reset_evaluation_state() en la instancia...")
+                        async for _ in eval_substate.reset_evaluation_state():
+                            pass
+                    else:
+                        print("WARN: No se pudo obtener la instancia de EvaluationState o el método reset_evaluation_state.")
+            except (ImportError, AttributeError, TypeError) as e:
+                print(f"DEBUG: No se pudo resetear EvaluationState: {e}")
+                pass
+
+            # Limpiar estado específico de cuestionarios si venimos de esa pestaña
+            if tab_anterior == "cuestionario" and CuestionarioState:
+                print("DEBUG: Reseteando estado de Cuestionario via get_state...")
+                try:
+                    cuestionario_substate = await self.get_state(CuestionarioState)
+                    if cuestionario_substate and hasattr(cuestionario_substate, "reset_cuestionario"):
+                        print("DEBUG: Llamando a CuestionarioState.reset_cuestionario() en la instancia...")
+                        async for _ in cuestionario_substate.reset_cuestionario():
+                            pass
+                    else:
+                        print("WARN: No se pudo obtener la instancia de CuestionarioState o el método reset_cuestionario.")
+                except Exception as e:
+                    print(f"ERROR: Excepción al intentar resetear CuestionarioState via get_state: {e}")
+                    traceback.print_exc()
+
+        # Establecer la nueva pestaña activa
+        self.active_tab = tab
+
+        # Cargar estadísticas si vamos a la pestaña de perfil
+        if tab == "perfil":
+            async for _ in self.load_stats():
+                pass
+        else:
+            yield
+
+    def toggle_pregunta(self, index: int):
+        """Abre o cierra una pregunta de la pestaña de ayuda."""
+        if self.ayuda_pregunta_abierta == index:
+            # Si la pregunta ya está abierta, la cerramos
+            self.ayuda_pregunta_abierta = -1
+        else:
+            # Si la pregunta está cerrada, la abrimos
+            self.ayuda_pregunta_abierta = index
+        yield
+
+    def go_to_curso_and_resumen(self, curso: str):
+        if not isinstance(curso, str) or not curso:
+            return
+        self.selected_curso = curso
+        self.selected_libro = ""
+        self.selected_tema = ""
+        self.resumen_content = ""
+        self.puntos_content = ""
+        self.mapa_mermaid_code = ""
+        self.mapa_image_url = ""
+        self.error_message_ui = ""
+        self.active_tab = "resumen"
+        yield
+
+    def go_to_resumen_tab(self):
+        self.error_message_ui = ""
+        self.resumen_content = ""
+        self.puntos_content = ""
+        yield
+
+    def go_to_mapa_tab(self):
+        self.error_message_ui = ""
+        self.mapa_image_url = ""
+        self.mapa_mermaid_code = ""
+        yield
+
+    def go_to_evaluacion_tab(self):
+        self.error_message_ui = ""
+        yield
+
+    def handle_login(self):
+        self.login_error_message = ""
+        self.error_message_ui = ""
+        if not self.username_input or not self.password_input:
+            self.login_error_message = "Ingresa usuario y contraseña."
+            return
+        if (self.username_input == "felipe" and self.password_input == "1234") or \
+           (self.username_input == "test" and self.password_input == "123"):
+            self.is_logged_in = True
+            self.logged_in_username = self.username_input
+            self.username_input = self.password_input = ""
+            self.active_tab = "inicio"
+            
+            # Cargar estadísticas del usuario desde la BD
+            if BACKEND_AVAILABLE and hasattr(db_logic, "get_user_stats") and hasattr(db_logic, "update_user_login"):
+                try:
+                    # Actualizar fecha de último login
+                    db_logic.update_user_login(self.logged_in_username)
+                    
+                    # Recuperar contadores del usuario
+                    user_stats = db_logic.get_user_stats(self.logged_in_username)
+                    if user_stats:
+                        self.resumenes_generados_count = user_stats.get("resumenes_count", 0)
+                        self.mapas_creados_count = user_stats.get("mapas_count", 0)
+                        print(f"DEBUG: Contadores cargados de BD: Resúmenes={self.resumenes_generados_count}, Mapas={self.mapas_creados_count}")
+                    else:
+                        # Si no hay estadísticas, inicializar a 0
+                        self.resumenes_generados_count = 0
+                        self.mapas_creados_count = 0
+                except Exception as e:
+                    print(f"ERROR: No se pudieron cargar estadísticas del usuario: {e}")
+                    self.resumenes_generados_count = 0
+                    self.mapas_creados_count = 0
+            else:
+                # Si no está disponible el backend, inicializar a 0
+                self.resumenes_generados_count = 0
+                self.mapas_creados_count = 0
+            
+            yield
+            return
+        if not BACKEND_AVAILABLE:
+            self.login_error_message = "Servicio no disponible. Cuentas prueba: felipe/1234, test/123."
+            yield
+            return
+        if not hasattr(login_logic, "verificar_login") or not callable(login_logic.verificar_login):
+            self.login_error_message = "Error servicio autenticación."
+            yield
+            return
+        try:
+            is_valid = login_logic.verificar_login(self.username_input, self.password_input)
+            if is_valid:
+                self.is_logged_in = True
+                self.logged_in_username = self.username_input
+                self.username_input = self.password_input = ""
+                self.active_tab = "inicio"
+                
+                # Cargar estadísticas del usuario desde la BD
+                if BACKEND_AVAILABLE and hasattr(db_logic, "get_user_stats") and hasattr(db_logic, "update_user_login"):
+                    try:
+                        # Actualizar fecha de último login
+                        db_logic.update_user_login(self.logged_in_username)
+                        
+                        # Recuperar contadores del usuario
+                        user_stats = db_logic.get_user_stats(self.logged_in_username)
+                        if user_stats:
+                            self.resumenes_generados_count = user_stats.get("resumenes_count", 0)
+                            self.mapas_creados_count = user_stats.get("mapas_count", 0)
+                            print(f"DEBUG: Contadores cargados de BD: Resúmenes={self.resumenes_generados_count}, Mapas={self.mapas_creados_count}")
+                        else:
+                            # Si no hay estadísticas, inicializar a 0
+                            self.resumenes_generados_count = 0
+                            self.mapas_creados_count = 0
+                    except Exception as e:
+                        print(f"ERROR: No se pudieron cargar estadísticas del usuario: {e}")
+                        self.resumenes_generados_count = 0
+                        self.mapas_creados_count = 0
+                else:
+                    # Si no está disponible el backend, inicializar a 0
+                    self.resumenes_generados_count = 0
+                    self.mapas_creados_count = 0
+            else:
+                self.login_error_message = "Usuario o contraseña incorrectos."
+                self.password_input = ""
+        except Exception as e:
+            print(f"Error login: {e}")
+            self.login_error_message = "Error servicio autenticación. Intenta más tarde."
+            self.password_input = ""
+        yield
+
+    def logout(self):
+        """Cierra la sesión del usuario actual."""
+        # Guardar estadísticas del usuario en la BD antes de cerrar sesión
+        if self.is_logged_in and self.logged_in_username and BACKEND_AVAILABLE and hasattr(db_logic, "update_user_stats"):
+            try:
+                # Persistir los contadores en la base de datos antes de cerrar sesión
+                db_logic.update_user_stats(
+                    self.logged_in_username, 
+                    resumenes_count=self.resumenes_generados_count, 
+                    mapas_count=self.mapas_creados_count
+                )
+                print(f"INFO: Contadores guardados al cerrar sesión: Resúmenes={self.resumenes_generados_count}, Mapas={self.mapas_creados_count}")
+            except Exception as e:
+                print(f"ERROR: No se pudieron guardar estadísticas al cerrar sesión: {e}")
+
+        # Proceder con el cierre de sesión
+        self.is_logged_in = False
+        self.logged_in_username = ""  # Corregido: username → logged_in_username
+        self.active_tab = "inicio"
+        # Reiniciar todas las variables de estado relacionadas con la sesión
+        self.selected_curso = ""
+        self.selected_libro = ""
+        self.selected_tema = ""
+        self.mapa_image_url = ""
+        # Eliminamos la redirección que podría causar el error 404
+        yield  # Usamos yield en lugar de return para que Reflex maneje la redirección internamente
+
+    def clear_selection_and_results(self):
+        print("DEBUG: Ejecutando clear_selection_and_results...")
+        self.selected_tema = ""
+        self.selected_libro = ""
+        self.resumen_content = ""
+        self.puntos_content = ""
+        self.mapa_mermaid_code = ""
+        self.mapa_image_url = ""
+        self.error_message_ui = ""
+
+    def handle_curso_change(self, new_curso: str):
+        print(f"DEBUG: handle_curso_change -> {new_curso}")
+        self.selected_curso = new_curso
+        self.selected_libro = ""
+        self.selected_tema = ""
+        self.error_message_ui = ""
+        yield
+
+    def handle_libro_change(self, new_libro: str):
+        print(f"DEBUG: handle_libro_change -> {new_libro}")
+        self.selected_libro = new_libro
+        self.selected_tema = ""
+        self.error_message_ui = ""
+        yield
+
+    def handle_libros_curso_change(self, new_curso: str):
+        print(f"DEBUG: handle_libros_curso_change -> {new_curso}")
+        self.selected_curso = new_curso
+        self.selected_libro = ""
+        self.error_message_ui = ""
+        yield
+
+    def handle_libros_libro_change(self, new_libro: str):
+        print(f"DEBUG: handle_libros_libro_change -> {new_libro}")
+        self.selected_libro = new_libro
+        self.error_message_ui = ""
+        yield
+
+    def set_selected_tema(self, new_tema: str):
+        if not isinstance(new_tema, str):
+            return
+        print(f"DEBUG: set_selected_tema -> {new_tema[:50]}...")
+        self.selected_tema = new_tema
+        yield
+
+    def set_include_puntos(self, value: bool):
+        if not isinstance(value, bool):
+            return
+        self.include_puntos = value
+        yield
+
+    def handle_puntos_switch(self, value: bool):
+        """Manejador seguro para el switch de puntos clave que verifica el estado del tema."""
+        # Verificamos si hay un tema seleccionado y solo entonces cambiamos el estado
+        if self.selected_tema != "":  # Esta evaluación ocurre en el backend (Python), no en el frontend (JavaScript)
+            self.include_puntos = value
+        yield
+        
+    def set_mapa_orientacion(self, value: bool):
+        if not isinstance(value, bool):
+            return
+        self.mapa_orientacion_horizontal = value
+        self.mapa_image_url = ""
+        self.mapa_mermaid_code = ""
+        yield
+
+    def clear_map(self):
+        self.mapa_image_url = ""
+        self.mapa_mermaid_code = ""
+        self.error_message_ui = ""
+        yield
+
+
+    async def generate_summary(self):
+        """Genera un resumen del tema seleccionado usando el backend."""
+        print("DEBUG: Iniciando generate_summary...")
+        if not self.selected_curso or not self.selected_libro or not self.selected_tema:
+            self.error_message_ui = self.translate("error_select_all_fields")
+            yield
+
+
+    async def download_pdf(self):
+        """Función general para descargar PDFs según el contexto actual (resumen, mapa o cuestionario)"""
+        print(f"DEBUG: Iniciando download_pdf para pestaña {self.active_tab}...")
+        
+        try:
+            # Determinar qué tipo de contenido descargar según la pestaña activa
+            if self.active_tab == "resumen":
+                async for result in self.download_resumen_pdf():
+                    yield result
+            elif self.active_tab == "mapa":
+                async for result in self.download_map_pdf():
+                    yield result
+            elif self.active_tab == "cuestionario":
+                async for result in self.download_cuestionario_pdf():
+                    yield result
+            elif self.active_tab == "evaluacion":
+                # Si hay una implementación específica para evaluaciones la usaríamos aquí
+                # Por ahora, mostramos un mensaje informativo
+                self.error_message_ui = "La descarga de PDF para evaluaciones no está implementada aún."
+                yield
+            else:
+                self.error_message_ui = f"No se puede descargar PDF para la pestaña {self.active_tab}."
+                yield
+        except Exception as e:
+            self.error_message_ui = f"Error al descargar PDF: {str(e)}"
+            print(f"ERROR download_pdf: {e}")
+            yield
+        if not BACKEND_AVAILABLE:
+            self.error_message_ui = self.translate("error_service_unavailable")
+            yield
+
+
+    async def download_resumen_pdf(self):
+        """Descarga el resumen actual en formato PDF"""
+        print("DEBUG: Iniciando download_resumen_pdf...")
+        if not self.resumen_content:
+            self.error_message_ui = "No hay resumen para descargar."
+            yield
+            return
+
+        s_tema = re.sub(r'[\/*?:"<>|]', "", self.selected_tema or "tema")[:50]
+        s_lib = re.sub(r'[\/*?:"<>|]', "", self.selected_libro or "libro")[:50]
+        s_cur = re.sub(r'[\/*?:"<>|]', "", self.selected_curso or "curso")[:50]
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        fname_base = f"Resumen_{s_cur}_{s_lib}_{s_tema}_{timestamp}".replace(" ", "_")
+
+        try:
+            pdf_generado = False
+            if hasattr(resumen_logic, "generar_resumen_pdf_bytes"):
+                print("DEBUG: Intentando generar PDF con resumen_logic...")
+                try:
+                    pdf_bytes = resumen_logic.generar_resumen_pdf_bytes(
+                        resumen_txt=self.resumen_content,
+                        puntos_txt=self.puntos_content if self.include_puntos else "",
+                        titulo=f"Resumen: {self.selected_tema or 'General'}",
+                        subtitulo=f"Curso: {self.selected_curso or 'N/A'} - Libro: {self.selected_libro or 'N/A'}",
+                    )
+                    if isinstance(pdf_bytes, bytes) and pdf_bytes.startswith(b"%PDF"):
+                        fname = f"{fname_base}.pdf"
+                        print(f"DEBUG: PDF generado ({len(pdf_bytes)} bytes). Descargando como {fname}")
+                        yield rx.download(data=pdf_bytes, filename=fname)
+                        pdf_generado = True
+                    else:
+                        print("WARN: resumen_logic.generar_resumen_pdf_bytes no devolvió un PDF válido.")
+                except Exception as pdf_e:
+                    print(f"WARN: Error en generación de PDF con resumen_logic (usando fallback HTML): {pdf_e}")
+
+            if not pdf_generado:
+                print("DEBUG: Generando fallback HTML...")
+                html_content = f"""<!DOCTYPE html>
+                <html lang="es">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Resumen: {s_tema}</title>
+                    <style>
+                        body {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }}
+                        h1 {{ color: #2563eb; }}
+                        h2 {{ color: #4b5563; margin-top: 30px; }}
+                        .resumen {{ background-color: #f3f4f6; padding: 20px; border-radius: 5px; }}
+                        .puntos {{ margin-top: 30px; }}
+                        .puntos ol {{ padding-left: 20px; }}
+                    </style>
+                </head>
+                <body>
+                    <h1>Resumen: {self.selected_tema}</h1>
+                    <h3>Curso: {self.selected_curso} - Libro: {self.selected_libro}</h3>
+                    <hr>
+                    <div class="resumen">
+                        {self.resumen_content.replace('\n', '<br>')}
+                    </div>
+                    
+                    {f'<h2>Puntos Clave:</h2><div class="puntos">{self.puntos_content.replace("\n", "<br>")}</div>' if self.puntos_content and self.include_puntos else ''}
+                    
+                    <hr>
+                    <footer>
+                        <p><i>Generado por SMART_STUDENT el {datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")}</i></p>
+                    </footer>
+                </body>
+                </html>"""
+                fname = f"{fname_base}.html"
+                print(f"DEBUG: Descargando resumen como HTML: {fname}")
+                yield rx.download(data=html_content.encode("utf-8", errors='replace'), filename=fname)
+
+        except Exception as e:
+            self.error_message_ui = f"Error descarga: {str(e)}"
+            print(f"ERROR DWNLD PDF/HTML: {traceback.format_exc()}")
+            yield
+
+    async def download_map_pdf(self):
+        """Descarga el mapa conceptual actual en formato PDF"""
+        print("DEBUG: Iniciando download_map_pdf...")
+        if not self.mapa_mermaid_code or not self.mapa_image_url:
+            self.error_message_ui = "No hay mapa conceptual para descargar."
+            yield
+            return
+
+        s_tema = re.sub(r'[\/*?:"<>|]', "", self.selected_tema or "tema")[:50]
+        s_lib = re.sub(r'[\/*?:"<>|]', "", self.selected_libro or "libro")[:50]
+        s_cur = re.sub(r'[\/*?:"<>|]', "", self.selected_curso or "curso")[:50]
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        fname_base = f"Mapa_{s_cur}_{s_lib}_{s_tema}_{timestamp}".replace(" ", "_")
+
+        try:
+            pdf_generado = False
+            if hasattr(map_logic, "generar_mapa_pdf_bytes"):
+                print("DEBUG: Intentando generar PDF del mapa con map_logic...")
+                try:
+                    pdf_bytes = map_logic.generar_mapa_pdf_bytes(
+                        mermaid_code=self.mapa_mermaid_code,
+                        tema=self.selected_tema,
+                        curso=self.selected_curso,
+                        libro=self.selected_libro,
+                        html_url=self.mapa_image_url
+                    )
+                    if isinstance(pdf_bytes, bytes) and pdf_bytes.startswith(b"%PDF"):
+                        fname = f"{fname_base}.pdf"
+                        print(f"DEBUG: PDF del mapa generado ({len(pdf_bytes)} bytes). Descargando como {fname}")
+                        yield rx.download(data=pdf_bytes, filename=fname)
+                        pdf_generado = True
+                    else:
+                        print("WARN: map_logic.generar_mapa_pdf_bytes no devolvió un PDF válido.")
+                except Exception as pdf_e:
+                    print(f"WARN: Error en generación de PDF del mapa (usando fallback HTML): {pdf_e}")
+                    traceback.print_exc()
+
+            if not pdf_generado:
+                print("DEBUG: Generando mapa fallback HTML...")
+                html_content = f"""<!DOCTYPE html>
+                <html lang="es">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Mapa Conceptual: {s_tema}</title>
+                    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+                    <style>
+                        body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                        h1 {{ color: #2563eb; }}
+                        .mermaid {{ background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                    </style>
+                </head>
+                <body>
+                    <h1>Mapa Conceptual: {self.selected_tema}</h1>
+                    <h3>Curso: {self.selected_curso} - Libro: {self.selected_libro}</h3>
+                    <hr>
+                    <div class="mermaid">
+                        {self.mapa_mermaid_code}
+                    </div>
+                    <script>
+                        mermaid.initialize({{
+                            startOnLoad: true,
+                            theme: 'default',
+                            themeVariables: {{
+                                primaryColor: '#d4e8ff',
+                                primaryTextColor: '#003366',
+                                primaryBorderColor: '#7fb3ff',
+                                lineColor: '#4b5563',
+                                fontSize: '16px'
+                            }}
+                        }});
+                    </script>
+                    <hr>
+                    <footer>
+                        <p><i>Generado por SMART_STUDENT el {datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")}</i></p>
+                    </footer>
+                </body>
+                </html>"""
+                fname = f"{fname_base}.html"
+                print(f"DEBUG: Descargando mapa como HTML: {fname}")
+                yield rx.download(data=html_content.encode("utf-8", errors='replace'), filename=fname)
+
+        except Exception as e:
+            self.error_message_ui = f"Error al descargar mapa: {str(e)}"
+            print(f"ERROR DWNLD MAP PDF/HTML: {traceback.format_exc()}")
+            yield
+
+    async def download_cuestionario_pdf(self):
+        """Descarga el cuestionario actual en formato PDF"""
+        # Importamos solo cuando se necesita para evitar dependencias circulares
+        from .cuestionario import CuestionarioState
+        
+        print("DEBUG: Iniciando download_cuestionario_pdf...")
+        
+        # Verificar disponibilidad de preguntas
+        print("DEBUG: Verificando disponibilidad de preguntas...")
+        
+        try:
+            # Intentar acceder directamente al array de preguntas
+            preguntas_array = CuestionarioState.cuestionario_preguntas
+            
+            # Intentar convertir a Python para verificar su contenido
+            try:
+                preguntas_py = preguntas_array.to_py()
+                print(f"DEBUG: Array de preguntas convertido exitosamente. Cantidad: {len(preguntas_py) if preguntas_py else 0}")
+                
+                # Si no hay preguntas, mostrar error
+                if not preguntas_py or len(preguntas_py) == 0:
+                    print("DEBUG: No hay preguntas disponibles en el array")
+                    self.error_message_ui = "No hay preguntas en el cuestionario para descargar."
+                    yield
+                    return
+            except Exception as e:
+                print(f"DEBUG: Error al convertir array de preguntas: {e}")
+                # Intentar acceder directamente al primer elemento para verificar si hay preguntas
+                try:
+                    primera_pregunta = preguntas_array[0]
+                    # Si llegamos aquí, hay al menos una pregunta
+                    print("DEBUG: Verificación alternativa de preguntas exitosa")
+                except Exception as e:
+                    print(f"DEBUG: No se pudo acceder a la primera pregunta: {e}")
+                    self.error_message_ui = "No hay preguntas en el cuestionario para descargar."
+                    yield
+                    return
+                
+        except Exception as e:
+            print(f"DEBUG: Error al verificar preguntas: {e}")
+            self.error_message_ui = "Error al acceder a las preguntas del cuestionario."
+            yield
+            return
+
+        # Obtener información del cuestionario
+        print("DEBUG: Obteniendo información de tema, libro y curso...")
+        
+        # Variables para usar en nombres de archivo
+        tema_val = "tema"
+        lib_val = "libro"
+        cur_val = "curso"
+        
+        try:
+            # Obtener tema de manera segura
+            try:
+                tema_val = CuestionarioState.cuestionario_tema.to_py() or tema_val
+                print(f"DEBUG: Tema obtenido: {tema_val}")
+            except Exception as e:
+                print(f"DEBUG: Error obteniendo tema: {e}")
+                try:
+                    tema_val = CuestionarioState.selected_tema.to_py() or tema_val
+                    print(f"DEBUG: Tema alternativo obtenido: {tema_val}")
+                except:
+                    pass
+            
+            # Obtener libro de manera segura
+            try:
+                lib_val = CuestionarioState.cuestionario_libro.to_py() or lib_val
+                print(f"DEBUG: Libro obtenido: {lib_val}")
+            except Exception as e:
+                print(f"DEBUG: Error obteniendo libro: {e}")
+                try:
+                    lib_val = CuestionarioState.selected_libro.to_py() or lib_val
+                    print(f"DEBUG: Libro alternativo obtenido: {lib_val}")
+                except:
+                    pass
+                    
+            # Obtener curso de manera segura
+            try:
+                cur_val = CuestionarioState.cuestionario_curso.to_py() or cur_val
+                print(f"DEBUG: Curso obtenido: {cur_val}")
+            except Exception as e:
+                print(f"DEBUG: Error obteniendo curso: {e}")
+                try:
+                    cur_val = CuestionarioState.selected_curso.to_py() or cur_val
+                    print(f"DEBUG: Curso alternativo obtenido: {cur_val}")
+                except:
+                    pass
+        except Exception as e:
+            print(f"DEBUG: Error general obteniendo información: {e}")
+            # Continuar con valores por defecto
+        
+        # Sanitizar nombres de archivos
+        s_tema = re.sub(r'[\/*?:"<>|]', "", str(tema_val))[:50]
+        s_lib = re.sub(r'[\/*?:"<>|]', "", str(lib_val))[:50]
+        s_cur = re.sub(r'[\/*?:"<>|]', "", str(cur_val))[:50]
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        fname_base = f"Cuestionario_{s_cur}_{s_lib}_{s_tema}_{timestamp}".replace(" ", "_")
+        print(f"DEBUG: Nombre base para archivo: {fname_base}")
+
+        # Verificar si ya existe un PDF y descargarlo directamente
+        try:
+            pdf_url_val = None
+            try:
+                pdf_url_val = CuestionarioState.cuestionario_pdf_url.to_py()
+            except:
+                print("DEBUG: No se pudo obtener la URL del PDF desde CuestionarioState")
+
+            if pdf_url_val:
+                print(f"DEBUG: URL de PDF encontrada: {pdf_url_val}")
+                # Verificar si ya existe el archivo
+                filename = os.path.basename(pdf_url_val)
+                asset_path = os.path.join("assets", "pdfs", filename)
+                
+                if os.path.exists(asset_path) and os.path.getsize(asset_path) > 0:
+                    print(f"DEBUG: PDF existente encontrado: {asset_path}")
+                    # Verificar si el archivo es un PDF válido
+                    with open(asset_path, 'rb') as f:
+                        is_pdf = f.read(4).startswith(b'%PDF')
+                    
+                    if is_pdf:
+                        print(f"DEBUG: PDF válido, descargando...")
+                        with open(asset_path, 'rb') as f:
+                            pdf_bytes = f.read()
+                        
+                        yield rx.download(
+                            data=pdf_bytes, 
+                            filename=filename,
+                            # También podríamos usar fname_base + ".pdf" para un nombre más específico
+                        )
+                        # Si llegamos aquí, la descarga fue exitosa
+                        return
+                    else:
+                        print("DEBUG: El archivo no es un PDF válido")
+                else:
+                    print(f"DEBUG: PDF no encontrado en: {asset_path}")
+            else:
+                print("DEBUG: No hay URL de PDF disponible")
+        except Exception as e:
+            print(f"ERROR: Al intentar usar PDF existente: {e}")
+            # Continuamos con el fallback
+
+        # Fallback: Generar HTML con las preguntas
+        try:
+            print("DEBUG: Generando fallback HTML para cuestionario...")
+            
+            # Convertir preguntas a HTML
+            preguntas_html = ""
+            try:
+                for i, pregunta in enumerate(CuestionarioState.cuestionario_preguntas):
+                    pregunta_py = pregunta.to_py() if hasattr(pregunta, "to_py") else pregunta
+                    if isinstance(pregunta_py, dict):
+                        texto_pregunta = pregunta_py.get("pregunta", "")
+                        explicacion = pregunta_py.get("explicacion", "")
+                        
+                        preguntas_html += f"""
+                        <div class="pregunta">
+                            <h3>Pregunta {i+1}</h3>
+                            <p>{texto_pregunta}</p>
+                            <div class="explicacion">
+                                <h4>Respuesta:</h4>
+                                <p>{explicacion}</p>
+                            </div>
+                        </div>
+                        <hr>
+                        """
+            except Exception as e:
+                print(f"ERROR: Generando HTML para preguntas: {e}")
+                preguntas_html = f"<p>Error al procesar las preguntas: {e}</p>"
+            
+            html_content = f"""<!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <title>Cuestionario: {s_tema}</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }}
+                    h1 {{ color: #2563eb; }}
+                    h2 {{ color: #4b5563; margin-top: 30px; }}
+                    .pregunta {{ background-color: #f9fafb; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
+                    .explicacion {{ background-color: #e6f7f2; padding: 10px; border-radius: 5px; margin-top: 10px; }}
+                </style>
+            </head>
+            <body>
+                <h1>Cuestionario: {s_tema}</h1>
+                <h3>Curso: {s_cur} - Libro: {s_lib}</h3>
+                <hr>
+                
+                {preguntas_html}
+                
+                <footer>
+                    <p><i>Generado por SMART_STUDENT el {datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")}</i></p>
+                </footer>
+            </body>
+            </html>
+            """
+            
+            fname = f"{fname_base}.html"
+            print(f"DEBUG: Descargando cuestionario como HTML: {fname}")
+            yield rx.download(data=html_content.encode("utf-8", errors='replace'), filename=fname)
+            
+        except Exception as e:
+            self.error_message_ui = f"Error al generar cuestionario: {str(e)}"
+            print(f"ERROR DWNLD CUESTIONARIO: {traceback.format_exc()}")
+            yield
+        self.is_generating_resumen = True
+        self.resumen_content = ""
+        self.puntos_content = ""
+        self.error_message_ui = ""
+        yield
+        try:
+            if not hasattr(resumen_logic, "generar_resumen_logica"):
+                raise AttributeError("Falta resumen_logic.generar_resumen_logica")
+            print(f"DEBUG: Llamando resumen_logic con C='{self.selected_curso}', L='{self.selected_libro}', T='{self.selected_tema}', Puntos={self.include_puntos}")
+            result = resumen_logic.generar_resumen_logica(
+                self.selected_curso, self.selected_libro, self.selected_tema.strip(), self.include_puntos
+            )
+            print(f"DEBUG: Resultado de resumen_logic: {result}")
+            if isinstance(result, dict) and result.get("status") == "EXITO":
+                self.resumen_content = result.get("resumen", "")
+                if self.include_puntos:
+                    puntos = result.get("puntos")
+                    self.puntos_content = puntos if isinstance(puntos, str) else ""
+                else:
+                    self.puntos_content = ""
+                    
+                # Incrementar el contador de resúmenes generados
+                self.resumenes_generados_count += 1
+                print(f"DEBUG: Incrementado contador de resúmenes a {self.resumenes_generados_count}")
+                
+                # Persistir el contador en la BD
+                if BACKEND_AVAILABLE and hasattr(db_logic, "update_user_stats") and self.logged_in_username:
+                    try:
+                        db_logic.update_user_stats(self.logged_in_username, resumenes_count=self.resumenes_generados_count)
+                    except Exception as e:
+                        print(f"ERROR: No se pudo actualizar contador de resúmenes en BD: {e}")
+            else:
+                msg = result.get("message", "Error resumen.") if isinstance(result, dict) else "Error respuesta."
+                self.error_message_ui = msg
+                print(f"ERROR: Falla en resumen_logic: {msg}")
+        except AttributeError as ae:
+            self.error_message_ui = f"Error config: {ae}"
+            print(f"ERROR Config: {self.error_message_ui}")
+        except Exception as e:
+            self.error_message_ui = f"Error crítico resumen: {str(e)}"
+            print(f"ERROR G-SUM: {traceback.format_exc()}")
+        finally:
+            self.is_generating_resumen = False
+            yield
+    async def generate_summary(self):
+        """Genera un resumen del tema seleccionado usando el backend."""
+        print("DEBUG: Iniciando generate_summary...")
+        if not self.selected_curso or not self.selected_libro or not self.selected_tema:
+            self.error_message_ui = self.translate("error_select_all_fields")
+            yield
+            return
+        if not BACKEND_AVAILABLE:
+            self.error_message_ui = self.translate("error_service_unavailable")
+            yield
+            return
+        self.is_generating_resumen = True
+        self.resumen_content = ""
+        self.puntos_content = ""
+        self.error_message_ui = ""
+        yield
+        try:
+            if not hasattr(resumen_logic, "generar_resumen_logica"):
+                raise AttributeError("Falta resumen_logic.generar_resumen_logica")
+            print(f"DEBUG: Llamando resumen_logic con C='{self.selected_curso}', L='{self.selected_libro}', T='{self.selected_tema}', Puntos={self.include_puntos}")
+            result = resumen_logic.generar_resumen_logica(
+                self.selected_curso, self.selected_libro, self.selected_tema.strip(), self.include_puntos
+            )
+            print(f"DEBUG: Resultado de resumen_logic: {result}")
+            if isinstance(result, dict) and result.get("status") == "EXITO":
+                self.resumen_content = result.get("resumen", "")
+                if self.include_puntos:
+                    puntos = result.get("puntos")
+                    self.puntos_content = puntos if isinstance(puntos, str) else ""
+                else:
+                    self.puntos_content = ""
+                    
+                # Incrementar el contador de resúmenes generados
+                self.resumenes_generados_count += 1
+                print(f"DEBUG: Incrementado contador de resúmenes a {self.resumenes_generados_count}")
+                
+                # Persistir el contador en la BD
+                if BACKEND_AVAILABLE and hasattr(db_logic, "update_user_stats") and self.logged_in_username:
+                    try:
+                        db_logic.update_user_stats(self.logged_in_username, resumenes_count=self.resumenes_generados_count)
+                    except Exception as e:
+                        print(f"ERROR: No se pudo actualizar contador de resúmenes en BD: {e}")
+            else:
+                msg = result.get("message", "Error resumen.") if isinstance(result, dict) else "Error respuesta."
+                self.error_message_ui = msg
+                print(f"ERROR: Falla en resumen_logic: {msg}")
+        except AttributeError as ae:
+            self.error_message_ui = f"Error config: {ae}"
+            print(f"ERROR Config: {self.error_message_ui}")
+        except Exception as e:
+            self.error_message_ui = f"Error crítico resumen: {str(e)}"
+            print(f"ERROR G-SUM: {traceback.format_exc()}")
+        finally:
+            self.is_generating_resumen = False
+            yield
+
+    def toggle_language(self):
+        """Cambia el idioma entre español (es) e inglés (en) y guarda la preferencia."""
+        self.current_language = "en" if self.current_language == "es" else "es"
+        
+        # Guardar preferencia en el almacenamiento local del navegador
+        rx.client_side("localStorage.setItem('smart_student_language', '" + self.current_language + "');")
+        yield
+        
+    def load_language_preference(self):
+        """
+        Carga la preferencia de idioma guardada en el navegador.
+        Si no hay preferencia guardada, detecta el idioma del navegador.
+        """
+        # Carga la preferencia del almacenamiento local o detecta el idioma del navegador
+        result = yield rx.client_side("""
+            // Primero intentamos obtener el idioma guardado
+            const savedLang = localStorage.getItem('smart_student_language');
+            if (savedLang === 'en' || savedLang === 'es') {
+                return { value: savedLang, source: 'storage' };
+            }
+            
+            // Si no hay idioma guardado, detectamos el idioma del navegador
+            try {
+                // Obtener el idioma del navegador
+                const browserLang = (navigator.language || navigator.userLanguage || 'en').substring(0, 2).toLowerCase();
+                // Solo aceptamos español o inglés, con inglés como fallback
+                const detectedLang = (browserLang === 'es') ? 'es' : 'en';
+                
+                // Guardar la preferencia detectada
+                localStorage.setItem('smart_student_language', detectedLang);
+                
+                return { value: detectedLang, source: 'browser' };
+            } catch (e) {
+                // En caso de error, usamos inglés por defecto
+                return { value: 'en', source: 'default' };
+        """)
+        
+        if result and result.get("value") in ["en", "es"]:
+            self.current_language = result["value"]
+            # Podríamos usar result.get('source') para hacer algo específico según la fuente del idioma
+        yield
+        
+    @rx.var
+    def language_text(self) -> str:
+        """Devuelve el texto a mostrar en el botón de idioma."""
+        return self.translate("switch_language")
+    
+    @rx.var
+    def app_tagline_text(self) -> str:
+        """Returns the translated app tagline."""
+        return self.translate("app_tagline")
+        
+    def translate(self, key: str, default: str = None) -> str:
+        """
+        Traduce una clave según el idioma seleccionado.
+        
+        Args:
+            key: Clave de traducción a buscar
+            default: Valor por defecto si la clave no se encuentra
+            
+        Returns:
+            Texto traducido según el idioma actual
+        """
+        translations = get_translations(self.current_language)
+        if key in translations:
+            return translations[key]
+        return default if default else key
+        
+    @rx.var
+    def welcome_text(self) -> str:
+        """Returns the translated welcome text with emoji."""
+        return "🏠 " + self.translate("welcome")
+        
+    @rx.var
+    def welcome_subtitle_text(self) -> str:
+        """Returns the translated welcome subtitle."""
+        return self.translate("welcome_subtitle")
+        
+    # Feature section translations
+    @rx.var
+    def digital_books_title(self) -> str:
+        return self.translate("digital_books")
+        
+    @rx.var
+    def digital_books_desc(self) -> str:
+        return self.translate("digital_books_desc")
+        
+    @rx.var
+    def view_books_text(self) -> str:
+        return self.translate("view_books")
+    
+    @rx.var
+    def intelligent_summaries_title_text(self) -> str:
+        return self.translate("intelligent_summaries")
+    
+    @rx.var
+    def intelligent_summaries_desc_text(self) -> str:
+        return self.translate("intelligent_summaries_desc")
+    
+    @rx.var
+    def create_summary_text(self) -> str:
+        return self.translate("create_summary")
+    
+    @rx.var
+    def concept_maps_title_text(self) -> str:
+        return self.translate("concept_maps")
+    
+    @rx.var
+    def concept_maps_desc_text(self) -> str:
+        return self.translate("concept_maps_desc")
+    
+    @rx.var
+    def create_map_text(self) -> str:
+        return self.translate("create_map")
+    
+    @rx.var
+    def questionnaires_title_text(self) -> str:
+        return self.translate("questionnaires")
+    
+    @rx.var
+    def questionnaires_desc_text(self) -> str:
+        return self.translate("questionnaires_desc")
+    
+    @rx.var
+    def create_questionnaire_text(self) -> str:
+        return self.translate("create_questionnaire")
+    
+    @rx.var
+    def assessments_title_text(self) -> str:
+        return self.translate("assessments")
+    
+    @rx.var
+    def assessments_desc_text(self) -> str:
+        return self.translate("assessments_desc")
+    
+    @rx.var
+    def create_assessment_text(self) -> str:
+        return self.translate("create_assessment")
+    
+    @rx.var
+    def popular_resources_text(self) -> str:
+        return self.translate("popular_resources")
+        
+    # Cards content translations
+    @rx.var
+    def digital_books_title_text(self) -> str:
+        """Returns the translated digital books title."""
+        return self.translate("digital_books")
+        
+    @rx.var
+    def digital_books_desc_text(self) -> str:
+        """Returns the translated digital books description."""
+        return self.translate("digital_books_desc")
+        
+    @rx.var
+    def view_books_text(self) -> str:
+        """Returns the translated view books button text."""
+        return self.translate("view_books")
+        
+    # Math, Science, History, Language translations
+    @rx.var
+    def mathematics_text(self) -> str:
+        """Returns the translated mathematics text."""
+        return self.translate("mathematics")
+        
+    @rx.var
+    def science_text(self) -> str:
+        """Returns the translated science text."""
+        return self.translate("science")
+        
+    @rx.var
+    def history_text(self) -> str:
+        """Returns the translated history text."""
+        return self.translate("history")
+        
+    @rx.var
+    def language_text(self) -> str:
+        """Returns the translated language text."""
+        return self.translate("language")
+    
+    # Login page translations
+    @rx.var
+    def login_title_text(self) -> str:
+        """Returns the translated login title text."""
+        return self.translate("login_title")
+    
+    @rx.var
+    def login_subtitle_text(self) -> str:
+        """Returns the translated login subtitle text."""
+        return self.translate("login_subtitle")
+    
+    @rx.var
+    def username_placeholder_text(self) -> str:
+        """Returns the translated username placeholder text."""
+        return self.translate("username")
+    
+    @rx.var
+    def password_placeholder_text(self) -> str:
+        """Returns the translated password placeholder text."""
+        return self.translate("password")
+    
+    @rx.var
+    def forgot_password_text(self) -> str:
+        """Returns the translated forgot password text."""
+        return self.translate("forgot_password")
+        
+    @rx.var
+
+    def login_button_text(self) -> str:
+        """Returns the translated login button text."""
+        return self.translate("login_button")
+    
+    @rx.var
+    def sign_out_text(self) -> str:
+        """Returns the translated sign out button text."""
+        return self.translate("sign_out")
+    
+    @rx.var
+    def switch_language_text(self) -> str:
+        """Returns the translated switch language text."""
+        return self.translate("switch_language")
+    
+    @rx.var
+    def header_title_text(self) -> str:
+        """Returns the translated header title."""
+        return self.translate("header_title")
+    
+    @rx.var
+    def app_tagline_text(self) -> str:
+        """Returns the translated app tagline."""
+        return self.translate("app_tagline")
+    
+    @rx.var
+    def login_error_text(self) -> str:
+        """Returns the translated login error message."""
+        return self.translate("login_error")
+    
+    # Tabs translations
+    @rx.var
+    def tab_inicio_text(self) -> str:
+        """Returns the translated Home tab text."""
+        return self.translate("tab_inicio")
+    
+    @rx.var
+    def tab_libros_text(self) -> str:
+        """Returns the translated Books tab text."""
+        return self.translate("tab_libros")
+    
+    @rx.var
+    def tab_resumen_text(self) -> str:
+        """Returns the translated Summary tab text."""
+        return self.translate("tab_resumen")
+    
+    @rx.var
+    def tab_mapa_text(self) -> str:
+        """Returns the translated Mind Map tab text."""
+        return self.translate("tab_mapa")
+    
+    @rx.var
+    def tab_cuestionario_text(self) -> str:
+        """Returns the translated Questionnaire tab text."""
+        return self.translate("tab_cuestionario")
+    
+    @rx.var
+    def tab_evaluacion_text(self) -> str:
+        """Returns the translated Evaluation tab text."""
+        return self.translate("tab_evaluacion")
+    
+    @rx.var
+    def tab_perfil_text(self) -> str:
+        """Returns the translated Profile tab text."""
+        return self.translate("tab_perfil")
+    
+    @rx.var
+    def tab_ayuda_text(self) -> str:
+        """Returns the translated Help tab text."""
+        return self.translate("tab_ayuda")
+    
+    # Help tab translations
+    @rx.var
+    def help_center_text(self) -> str:
+        """Returns the translated help center text."""
+        return "🔍 " + self.translate("help_center")
+    
+    @rx.var
+    def help_subtitle_text(self) -> str:
+        """Returns the translated help subtitle text."""
+        return self.translate("help_subtitle")
+    
+    @rx.var
+    def frequent_questions_text(self) -> str:
+        """Returns the translated frequent questions text."""
+        return self.translate("frequent_questions")
+    
+    @rx.var
+    def not_found_help_text(self) -> str:
+        """Returns the translated not found help text."""
+        return self.translate("not_found_help")
+    
+    @rx.var
+    def contact_us_text(self) -> str:
+        """Returns the translated contact us text."""
+        return self.translate("contact_us")
+        
+    @rx.var
+    def intelligent_summaries_title(self) -> str:
+        return self.translate("intelligent_summaries")
+        
+    @rx.var
+    def intelligent_summaries_desc(self) -> str:
+        return self.translate("intelligent_summaries_desc")
+        
+    @rx.var
+    def create_summary_text(self) -> str:
+        return self.translate("create_summary")
+        
+    @rx.var
+    def concept_maps_title(self) -> str:
+        return self.translate("concept_maps")
+        
+    @rx.var
+    def concept_maps_desc(self) -> str:
+        return self.translate("concept_maps_desc")
+        
+    @rx.var
+    def create_map_text(self) -> str:
+        return self.translate("create_map")
+        
+    @rx.var
+    def questionnaires_title(self) -> str:
+        return self.translate("questionnaires")
+        
+    @rx.var
+    def questionnaires_desc(self) -> str:
+        return self.translate("questionnaires_desc")
+        
+    @rx.var
+    def create_questionnaire_text(self) -> str:
+        return self.translate("create_questionnaire")
+    
+    # Questionnaire tab translations
+    @rx.var
+    def questionnaire_challenge_heading_text(self) -> str:
+        return self.translate("questionnaire_challenge_heading")
+        
+    @rx.var
+    def questionnaire_subtitle_text(self) -> str:
+        return self.translate("questionnaire_subtitle")
+        
+    @rx.var
+    def select_course_questionnaire_text(self) -> str:
+        return self.translate("select_course_questionnaire")
+        
+    @rx.var
+    def select_book_questionnaire_text(self) -> str:
+        return self.translate("select_book_questionnaire")
+        
+    @rx.var
+    def questionnaire_topic_placeholder_text(self) -> str:
+        return self.translate("questionnaire_topic_placeholder")
+        
+    @rx.var
+    def generating_questionnaire_text(self) -> str:
+        return self.translate("generating_questionnaire")
+        
+    @rx.var
+    def generate_questionnaire_button_text(self) -> str:
+        return self.translate("generate_questionnaire_button")
+        
+    @rx.var
+    def questionnaire_heading_text(self) -> str:
+        return self.translate("questionnaire_heading")
+        
+    @rx.var
+    def question_number_text(self) -> str:
+        return self.translate("question_number")
+        
+    @rx.var
+    def answer_label_text(self) -> str:
+        return self.translate("answer_label")
+        
+    @rx.var
+    def select_course_placeholder_text(self) -> str:
+        """Returns the translated select course placeholder text."""
+        return self.translate("select_course_placeholder")
+    
+    @rx.var
+    def select_book_placeholder_text(self) -> str:
+        """Returns the translated select book placeholder text."""
+        return self.translate("select_book_placeholder")
+        
+    @rx.var
+    def download_pdf_button_text(self) -> str:
+        """Returns the translated download PDF button text."""
+        return self.translate("download_pdf_button")
+        
+    @rx.var
+    def topic_placeholder_text(self) -> str:
+        """Returns the translated topic placeholder text."""
+        return self.translate("topic_placeholder")
+        
+    @rx.var
+    def assessments_title(self) -> str:
+        return self.translate("assessments")
+        
+    @rx.var
+    def assessments_desc(self) -> str:
+        return self.translate("assessments_desc")
+        
+    @rx.var
+    def create_assessment_text(self) -> str:
+        return self.translate("create_assessment")
+        
+    @rx.var
+    def digital_library(self) -> str:
+        return self.translate("digital_library")
+        
+    @rx.var
+    def digital_library_desc(self) -> str:
+        return self.translate("digital_library_desc")
+    
+    # Evaluation tab translations
+    @rx.var
+    def evaluation_heading_text(self) -> str:
+        """Returns the translated evaluation heading text."""
+        return self.translate("evaluation_heading")
+    
+    @rx.var
+    def evaluation_subtitle_text(self) -> str:
+        """Returns the translated evaluation subtitle text."""
+        return self.translate("evaluation_subtitle")
+    
+    @rx.var
+    def select_course_evaluation_text(self) -> str:
+        """Returns the translated select course text for evaluation."""
+        return self.translate("select_course_evaluation")
+    
+    @rx.var
+    def select_book_evaluation_text(self) -> str:
+        """Returns the translated select book text for evaluation."""
+        return self.translate("select_book_evaluation")
+    
+    @rx.var
+    def evaluation_topic_placeholder_text(self) -> str:
+        """Returns the translated topic placeholder for evaluation."""
+        return self.translate("evaluation_topic_placeholder")
+    
+    @rx.var
+    def generating_evaluation_text(self) -> str:
+        """Returns the translated generating evaluation text."""
+        return self.translate("generating_evaluation")
+    
+    @rx.var
+    def generate_evaluation_button_text(self) -> str:
+        """Returns the translated generate evaluation button text."""
+        return self.translate("generate_evaluation_button")
+    
+    @rx.var
+    def question_text(self) -> str:
+        """Returns the translated question text."""
+        return self.translate("question_text")
+    
+    @rx.var
+    def of_text(self) -> str:
+        """Returns the translated 'of' text."""
+        return self.translate("of_text")
+    
+    @rx.var
+    def previous_button_text(self) -> str:
+        """Returns the translated previous button text."""
+        return self.translate("previous_button")
+    
+    @rx.var
+    def next_button_text(self) -> str:
+        """Returns the translated next button text."""
+        return self.translate("next_button")
+    
+    @rx.var
+    def finish_evaluation_button_text(self) -> str:
+        """Returns the translated finish evaluation button text."""
+        return self.translate("finish_evaluation_button")
+    
+    @rx.var
+    def finish_review_button_text(self) -> str:
+        """Returns the translated finish review button text."""
+        return self.translate("finish_review_button")
+    
+    @rx.var
+    def evaluation_completed_text(self) -> str:
+        """Returns the translated evaluation completed text."""
+        return self.translate("evaluation_completed")
+    
+    @rx.var
+    def completed_text(self) -> str:
+        """Returns the translated 'completed' text."""
+        return self.translate("completed_text")
+    
+    @rx.var
+    def correct_answers_text(self) -> str:
+        """Returns the translated correct answers text."""
+        return self.translate("correct_answers_text")
+    
+    @rx.var
+    def of_questions_text(self) -> str:
+        """Returns the translated 'of questions' text."""
+        return self.translate("of_questions_text")
+    
+    @rx.var
+    def questions_text(self) -> str:
+        """Returns the translated 'questions' text."""
+        return self.translate("questions_text")
+    
+    @rx.var
+    def motivation_text_1(self) -> str:
+        """Returns the first translated motivation text."""
+        return self.translate("motivation_text_1")
+    
+    @rx.var
+    def motivation_text_2(self) -> str:
+        """Returns the second translated motivation text."""
+        return self.translate("motivation_text_2")
+    
+    @rx.var
+    def new_evaluation_button_text(self) -> str:
+        """Returns the translated new evaluation button text."""
+        return self.translate("new_evaluation_button")
+    
+    @rx.var
+    def review_button_text(self) -> str:
+        """Returns the translated review button text."""
+        return self.translate("review_button")
+        
+    @rx.var
+    def evaluation_results_text(self) -> str:
+        """Returns the translated evaluation results text."""
+        return self.translate("evaluation_results")
+    
+    @rx.var
+    def score_text(self) -> str:
+        """Returns the translated score text."""
+        return self.translate("score")
+    
+    @rx.var
+    def review_answers_text(self) -> str:
+        """Returns the translated review answers text."""
+        return self.translate("review_answers")
+    
+    @rx.var
+    def return_to_dashboard_text(self) -> str:
+        """Returns the translated return to dashboard text."""
+        return self.translate("return_to_dashboard")
+    
+    @rx.var
+    def explanation_text(self) -> str:
+        """Returns the translated explanation text."""
+        return self.translate("explanation")
+    
+    @rx.var
+    def correct_answer_text(self) -> str:
+        """Returns the translated correct answer text."""
+        return self.translate("correct_answer")
+    
+    @rx.var
+    def true_text(self) -> str:
+        """Returns the translated 'true' text."""
+        return self.translate("true")
+    
+    @rx.var
+    def false_text(self) -> str:
+        """Returns the translated 'false' text."""
+        return self.translate("false")
+        
+    @rx.var
+    def explanation_heading_text(self) -> str:
+        """Returns the translated explanation heading text."""
+        return self.translate("explanation_heading")
+    
+    @rx.var
+    def correct_message_text(self) -> str:
+        """Returns the translated correct message text."""
+        return self.translate("correct_message")
+    
+    @rx.var
+    def incorrect_message_text(self) -> str:
+        """Returns the translated incorrect message text."""
+        return self.translate("incorrect_message")
+    
+    # --- FIN CLASE AppState ---
+    
+    @rx.var
+    def assessments_title_text(self) -> str:
+        return self.translate("assessments")
+    
+    @rx.var
+    def assessments_desc_text(self) -> str:
+        return self.translate("assessments_desc")
+    
+    @rx.var
+    def create_assessment_text(self) -> str:
+        return self.translate("create_assessment")
+    
+    @rx.var
+    def popular_resources_text(self) -> str:
+        return self.translate("popular_resources")
+        
+    # Cards content translations
+    @rx.var
+    def digital_books_title_text(self) -> str:
+        """Returns the translated digital books title."""
+        return self.translate("digital_books")
+        
+    @rx.var
+    def digital_books_desc_text(self) -> str:
+        """Returns the translated digital books description."""
+        return self.translate("digital_books_desc")
+        
+    @rx.var
+    def view_books_text(self) -> str:
+        """Returns the translated view books button text."""
+        return self.translate("view_books")
+        
+    # Math, Science, History, Language translations
+    @rx.var
+    def mathematics_text(self) -> str:
+        """Returns the translated mathematics text."""
+        return self.translate("mathematics")
+        
+    @rx.var
+    def science_text(self) -> str:
+        """Returns the translated science text."""
+        return self.translate("science")
+        
+    @rx.var
+    def history_text(self) -> str:
+        """Returns the translated history text."""
+        return self.translate("history")
+        
+    @rx.var
+    def language_text(self) -> str:
+        """Returns the translated language text."""
+        return self.translate("language")
+        
+    # --- FIN CLASE AppState ---
