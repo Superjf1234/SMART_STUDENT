@@ -5,13 +5,745 @@ Script principal de la interfaz web con Reflex.
 """
 
 import reflex as rx
-import sys, os, datetime, traceback, re  # Imports necesarios
-from typing import Dict, List, Optional, Set, Union, Any  # Tipado explícito
+import sys, os, datetime, traceback, re
+from typing import Dict, List, Optional, Set, Union, Any
 
-# --- Importación de Módulos Backend ---
+from .evaluaciones import EvaluationState
+# Importar el módulo CuestionarioState para cuestionarios
+from .cuestionario import CuestionarioState, cuestionario_tab_content
+# Importar componentes optimizados para mensajes de revisión
+from .review_components import mensaje_respuesta_correcta, mensaje_respuesta_incorrecta
+
+from .state import AppState, PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME, GOOGLE_FONT_STYLESHEET, FONT_FAMILY, error_callout # Importa AppState y constantes/helpers necesarios desde state.py
+
+# --- AÑADIMOS LA FUNCIÓN PARA MOSTRAR LAS PREGUNTAS ACTIVAS ---
+def vista_pregunta_activa():
+    """Componente que muestra la pregunta activa durante la evaluación, accediendo directo al estado y con estructura corregida."""
+
+    # Usamos rx.cond para manejar el caso inicial donde la pregunta puede no estar lista
+    return rx.card(
+        rx.vstack(
+            # Encabezado (Progreso y Tiempo)
+            rx.hstack(
+                rx.text(f"{AppState.question_text} {EvaluationState.eval_current_idx + 1} {AppState.of_text} {EvaluationState.eval_total_q}"),
+                rx.spacer(),
+                rx.text(EvaluationState.eval_time_formatted, font_weight="bold", color=EvaluationState.eval_time_color),
+                justify="between", width="100%", mb="1em"
+            ),
+            rx.progress(value=EvaluationState.eval_progress, width="100%", size="2", color_scheme=PRIMARY_COLOR_SCHEME, mb="1.5em"),
+
+            # --- Contenido Condicional ---
+            # Verifica si el índice actual es válido para la lista de preguntas Y la lista no está vacía
+            rx.cond(
+                (EvaluationState.eval_current_idx >= 0) & (EvaluationState.eval_preguntas.length() > EvaluationState.eval_current_idx),
+
+                # --- SI EL ÍNDICE ES VÁLIDO Y LA PREGUNTA EXISTE ---
+                rx.vstack(
+                    # Usamos .get() con default por si acaso la clave falta
+                    rx.heading(
+                        EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("pregunta", "Error al cargar pregunta"),
+                        size="5", mb="1.5em", text_align="left", width="100%"
+                    ),
+
+                    # Opciones - CORREGIDO para manejar verdadero_falso con un grupo de radio vertical
+                    rx.cond(
+                        # Usamos .get() también para el tipo
+                        EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "verdadero_falso",
+                          # SI ES VERDADERO/FALSO, usamos radio_group con orientación vertical (column)
+                        rx.vstack(
+                            rx.radio_group(
+                                ["Verdadero", "Falso"],  # Los items como lista directamente
+                                value=EvaluationState.current_radio_group_value,
+                                on_change=lambda value: EvaluationState.set_eval_answer(value.lower()),
+                                size="2",                                width="100%",
+                                # Usamos 'column' en lugar de 'vertical'
+                                direction="column", 
+                                spacing="3",  # Espaciado entre opciones
+                                is_disabled=EvaluationState.is_reviewing_eval,  # Deshabilitar en modo revisión
+                            ),
+                            # Mostrar resultado en modo revisión
+                            rx.cond(
+                                EvaluationState.is_reviewing_eval,
+                                rx.box(
+                                    rx.vstack(
+                                        rx.hstack(
+                                            rx.cond(
+                                                EvaluationState.is_current_question_correct_in_review,
+                                                rx.icon(
+                                                    "check-circle",
+                                                    color="green.500", 
+                                                    size=18
+                                                ),
+                                                rx.icon(
+                                                    "x-circle",
+                                                    color="red.500", 
+                                                    size=18
+                                                )
+                                            ),
+                                            rx.cond(
+                                                EvaluationState.is_current_question_correct_in_review,
+                                                mensaje_respuesta_correcta(),
+                                                mensaje_respuesta_incorrecta()
+                                            ),
+                                            spacing="2",
+                                        ),
+                                        rx.cond(
+                                            ~EvaluationState.is_current_question_correct_in_review,
+                                            rx.text(
+                                                f"{AppState.correct_answers_text}: {EvaluationState.get_correct_answer_text}",
+                                                color="gray.700", 
+                                                font_style="italic",
+                                                mt="0.5em"
+                                            ),
+                                        ),
+                                        width="100%",
+                                        align_items="flex_start",
+                                        mt="1em",
+                                        spacing="1",
+                                    ),
+                                    width="100%",
+                                ),
+                            ),
+                            # Sección de Explicación (en modo revisión)
+                            rx.cond(
+                                EvaluationState.is_reviewing_eval & (EvaluationState.get_current_explanation != ""),
+                                rx.box(
+                                    rx.vstack(
+                                        rx.heading(
+                                            "Explicación:",
+                                            size="4",
+                                            color="gray.700",
+                                            mb="0.5em",
+                                            font_style="italic"  # Agregamos cursiva al título
+                                        ),
+                                        rx.text(
+                                            EvaluationState.get_current_explanation,
+                                            color="gray.700",
+                                            line_height="1.6",
+                                            font_style="italic"  # Agregamos cursiva al texto de explicación
+                                        ),
+                                        width="100%",
+                                        align_items="flex_start",
+                                        spacing="2",
+                                        padding="1em",
+                                        margin_top="1.5em",
+                                        border="1px solid var(--gray-4)",
+                                        border_radius="lg",
+                                        bg="var(--gray-1)",
+                                    ),
+                                    width="100%",
+                                    mb="1.5em",
+                                ),
+                            ),
+                            width="100%",
+                            spacing="2",
+                            align_items="flex_start",
+                            mb="1em",
+                        ),
+                        
+                        # SI NO ES VERDADERO/FALSO, mantenemos el comportamiento original para otras opciones
+                        rx.cond(
+                            (EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "opcion_multiple") |
+                            (EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "alternativas"),                            # --- CORRECCIÓN: Cambiamos cómo se crean las opciones de radio ---
+                            rx.vstack(
+                                rx.radio_group(
+                                    # Definimos las opciones como una lista para radio_group
+                                    EvaluationState.get_current_question_options_texts,
+                                    value=EvaluationState.current_radio_group_value,
+                                    on_change=lambda value: EvaluationState.set_eval_answer_by_text(value),
+                                    size="2",
+                                    width="100%",
+                                    direction="column",
+                                    spacing="3",
+                                    is_disabled=EvaluationState.is_reviewing_eval,
+                                ),
+                                # Mostrar resultado en modo revisión
+                                rx.cond(
+                                    EvaluationState.is_reviewing_eval,
+                                    rx.box(
+                                        rx.vstack(
+                                            rx.hstack(
+                                                rx.cond(
+                                                EvaluationState.is_current_question_correct_in_review,
+                                                rx.icon(
+                                                    "check-circle",
+                                                    color="green.500", 
+                                                    size=18
+                                                ),
+                                                rx.icon(
+                                                    "x-circle",
+                                                    color="red.500", 
+                                                    size=18
+                                                )
+                                            ),
+                                                rx.cond(
+                                                EvaluationState.is_current_question_correct_in_review,
+                                                mensaje_respuesta_correcta(),
+                                                mensaje_respuesta_incorrecta()
+                                            ),
+                                                spacing="2",
+                                            ),
+                                            rx.cond(
+                                                ~EvaluationState.is_current_question_correct_in_review,
+                                                rx.text(
+                                                    f"{AppState.correct_answers_text}: {EvaluationState.get_correct_answer_text}",
+                                                    color="gray.700", 
+                                                    font_style="italic",
+                                                    mt="0.5em"
+                                                ),
+                                            ),
+                                            width="100%",
+                                            align_items="flex_start",
+                                            mt="1em",
+                                            spacing="1",
+                                        ),
+                                        width="100%",
+                                    ),
+                                ),
+                                # Sección de Explicación (en modo revisión)
+                                rx.cond(
+                                    EvaluationState.is_reviewing_eval & (EvaluationState.get_current_explanation != ""),
+                                    rx.box(
+                                        rx.vstack(
+                                            rx.heading(
+                                                "Explicación:",
+                                                size="4",
+                                                color="gray.700",
+                                                mb="0.5em",
+                                                font_style="italic"  # Agregamos cursiva al título
+                                            ),
+                                            rx.text(
+                                                EvaluationState.get_current_explanation,
+                                                color="gray.700",
+                                                line_height="1.6",
+                                                font_style="italic"  # Agregamos cursiva al texto de explicación
+                                            ),
+                                            width="100%",
+                                            align_items="flex_start",
+                                            spacing="2",
+                                            padding="1em",
+                                            margin_top="1.5em",
+                                            border="1px solid var(--gray-4)",
+                                            border_radius="lg",
+                                            bg="var(--gray-1)",
+                                        ),
+                                        width="100%",
+                                        mb="1.5em",
+                                    ),
+                                ),
+                                width="100%",
+                                spacing="2",
+                                align_items="flex_start",
+                                mb="1em"
+                            ),
+
+                            # IMPLEMENTACIÓN PARA SELECCIÓN MÚLTIPLE
+                            rx.cond(
+                                EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "seleccion_multiple",
+                                  # Implementación para selección múltiple (varias respuestas posibles)
+                                rx.vstack(
+                                    rx.text(
+                                        "Selecciona todas las opciones correctas:",
+                                        font_weight="bold",
+                                        mb="0.5em",
+                                        color="var(--purple-9)",
+                                    ),
+                                    rx.foreach(
+                                        EvaluationState.get_current_question_options,
+                                        lambda opcion: rx.hstack(
+                                            rx.checkbox(
+                                                # Corrección para evitar que las opciones aparezcan preseleccionadas
+                                                # Solo marcar como checked si el ID específicamente está en el conjunto de respuestas
+                                                is_checked=rx.cond(
+                                                    # Primero verificar si hay una respuesta guardada y es un conjunto (set)
+                                                    (EvaluationState.eval_user_answers.get(EvaluationState.eval_current_idx) != None),
+                                                    # Si hay respuesta, verificar si este ID específico está en el conjunto mediante un método seguro
+                                                    EvaluationState.check_if_option_selected(EvaluationState.eval_current_idx, opcion["id"]),
+                                                    # Si no hay respuesta, siempre devolver False (no seleccionado)
+                                                    False
+                                                ),
+                                                on_change=lambda selected=None, opt_id=opcion["id"]: EvaluationState.toggle_multiple_answer(opt_id),
+                                                size="2",
+                                                is_disabled=EvaluationState.is_reviewing_eval,
+                                            ),
+                                            rx.text(opcion["texto"], font_size="1rem", ml="0.5em"),
+                                            my="0.5em",
+                                            width="100%",
+                                            align_items="center",
+                                        )
+                                    ),
+                                    # Mostrar resultado en modo revisión
+                                    rx.cond(
+                                        EvaluationState.is_reviewing_eval,
+                                        rx.box(
+                                            rx.vstack(
+                                                rx.hstack(
+                                                    rx.cond(
+                                                EvaluationState.is_current_question_correct_in_review,
+                                                rx.icon(
+                                                    "check-circle",
+                                                    color="green.500", 
+                                                    size=18
+                                                ),
+                                                rx.icon(
+                                                    "x-circle",
+                                                    color="red.500", 
+                                                    size=18
+                                                )
+                                            ),
+                                                    rx.cond(
+                                                EvaluationState.is_current_question_correct_in_review,
+                                                mensaje_respuesta_correcta(),
+                                                mensaje_respuesta_incorrecta()
+                                            ),
+                                                    spacing="2",
+                                                ),
+                                                rx.cond(
+                                                    ~EvaluationState.is_current_question_correct_in_review,
+                                                    rx.text(
+                                                        f"Respuestas correctas: {EvaluationState.get_correct_answer_text}",
+                                                        color="gray.700", 
+                                                        font_style="italic",
+                                                        mt="0.5em"
+                                                    ),
+                                                ),
+                                                width="100%",
+                                                align_items="flex_start",
+                                                mt="1em",
+                                                spacing="1",
+                                            ),
+                                            width="100%",
+                                        ),
+                                    ),
+                                    # Sección de Explicación (en modo revisión)
+                                    rx.cond(
+                                        EvaluationState.is_reviewing_eval & (EvaluationState.get_current_explanation != ""),
+                                        rx.box(
+                                            rx.vstack(
+                                                rx.heading(
+                                                    rx.cond(
+                                                        AppState.current_language == "es",
+                                                        "Explicación:",
+                                                        "Explanation:"
+                                                    ),
+                                                    size="4",
+                                                    color="gray.700",
+                                                    mb="0.5em",
+                                                    font_style="italic"  # Agregamos cursiva al título
+                                                ),
+                                                rx.text(
+                                                    EvaluationState.get_current_explanation,
+                                                    color="gray.700",
+                                                    line_height="1.6",
+                                                    font_style="italic"  # Agregamos cursiva al texto de explicación
+                                                ),
+                                                width="100%",
+                                                align_items="flex_start",
+                                                spacing="2",
+                                                padding="1em",
+                                                margin_top="1.5em",
+                                                border="1px solid var(--gray-4)",
+                                                border_radius="lg",
+                                                bg="var(--gray-1)",
+                                            ),
+                                            width="100%",
+                                            mb="1.5em",
+                                        ),
+                                    ),
+                                    width="100%",
+                                    spacing="2",
+                                    align_items="flex_start",
+                                    mb="1em"
+                                ),
+                                
+                                # Mensaje para otros tipos de pregunta no implementados
+                                rx.text(
+                                    f"UI para tipo '{EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get('tipo', 'desconocido')}' no implementada.",
+                                    color="gray"
+                                )
+                            )
+                        )
+                    ),
+                    spacing="4",
+                    width="100%",
+                    align_items="flex_start"
+                ),
+
+                # --- SI EL ÍNDICE NO ES VÁLIDO (o lista vacía inicialmente) ---
+                rx.center(rx.spinner(size="3"), height="200px")  # Muestra spinner
+            ),
+            # --- Fin Contenido Condicional ---            # Botones de Navegación
+            rx.hstack(
+                rx.button(
+                    AppState.previous_button_text,
+                    on_click=EvaluationState.prev_eval_question,
+                    is_disabled=EvaluationState.is_first_eval_question,
+                    variant="outline"
+                ),
+                rx.spacer(),
+                rx.cond(
+                    EvaluationState.is_reviewing_eval,
+                    # En modo revisión
+                    rx.cond(
+                        EvaluationState.is_last_eval_question,
+                        rx.button(
+                            AppState.finish_review_button_text,
+                            on_click=EvaluationState.restart_evaluation,  # Volver al inicio
+                            color_scheme="blue"
+                        ),
+                        rx.button(
+                            AppState.next_button_text,
+                            on_click=EvaluationState.next_eval_question
+                        )
+                    ),                    # En modo normal
+                    rx.cond(
+                        EvaluationState.is_last_eval_question,
+                        rx.button(
+                            AppState.finish_evaluation_button_text,
+                            on_click=EvaluationState.calculate_eval_score,
+                            color_scheme="green"
+                        ),
+                        rx.button(
+                            AppState.next_button_text,
+                            on_click=EvaluationState.next_eval_question
+                        )
+                    )
+                ),
+                margin_top="2em",
+                width="100%"
+            ),
+            # Mensaje de error
+            error_callout(EvaluationState.eval_error_message),
+
+            # --- Modal de Resultados ---
+            rx.dialog.root(
+                rx.dialog.content(
+                    rx.center(  # Envolvemos todo el contenido en un center para centrar todo
+                        rx.vstack(
+                            # Título y encabezado
+                            rx.box(
+                                rx.vstack(
+                                    rx.heading(
+                                        "🏆 " + AppState.evaluation_completed_text,
+                                        size="5",
+                                        text_align="center",
+                                        mb="0.5em",
+                                    ),
+                                    # Título personalizado basado en la puntuación
+                                    rx.heading(
+                                        EvaluationState.eval_titulo_resultado,
+                                        size="4",
+                                        text_align="center",
+                                        color=rx.cond(
+                                            EvaluationState.eval_score < 40, "var(--orange-9)",
+                                            rx.cond(
+                                                EvaluationState.eval_score < 60, "var(--amber-9)",
+                                                rx.cond(
+                                                    EvaluationState.eval_score < 80, "var(--green-9)",
+                                                    "var(--teal-9)"
+                                                )
+                                            )
+                                        ),
+                                    ),
+                                    align_items="center",
+                                    width="100%",
+                                ),
+                                width="100%",
+                                mb="1.5em",
+                                animation="fadeIn 0.5s ease-in-out",
+                            ),
+                            # Círculo con porcentaje grande
+                            rx.center(
+                                rx.box(
+                                    rx.vstack(
+                                        rx.heading(
+                                            rx.cond(
+                                                EvaluationState.eval_score == None,
+                                                "0%",
+                                                f"{EvaluationState.eval_score}%"
+                                            ),
+                                            size="1",
+                                            color=rx.cond(
+                                                EvaluationState.eval_score < 40, "var(--red-9)",
+                                                rx.cond(
+                                                    EvaluationState.eval_score < 60, "var(--orange-9)",
+                                                    rx.cond(
+                                                        EvaluationState.eval_score < 80, "var(--amber-9)",
+                                                        rx.cond(
+                                                            EvaluationState.eval_score < 90, "var(--green-9)",
+                                                            "var(--teal-9)"
+                                                        )
+                                                    )
+                                                )
+                                            ),
+                                            text_align="center",
+                                        ),
+                                        rx.text(
+                                            AppState.completed_text,
+                                            font_size="0.9em",
+                                            color="gray",
+                                            mt="-0.5em",
+                                            text_align="center",
+                                        ),
+                                        align_items="center",
+                                        justify_content="center",
+                                        width="100%",
+                                    ),
+                                    width="150px",
+                                    height="150px",
+                                    border_radius="50%",
+                                    display="flex",
+                                    align_items="center",
+                                    justify_content="center",
+                                    bg=rx.cond(
+                                        EvaluationState.eval_score < 40, "var(--red-2)",
+                                        rx.cond(
+                                            EvaluationState.eval_score < 60, "var(--orange-2)",
+                                            rx.cond(
+                                                EvaluationState.eval_score < 80, "var(--amber-2)",
+                                                rx.cond(
+                                                    EvaluationState.eval_score < 90, "var(--green-2)",
+                                                    "var(--teal-2)"
+                                                )
+                                            )
+                                        )
+                                    ),
+                                    border="3px solid",
+                                    border_color=rx.cond(
+                                        EvaluationState.eval_score < 40, "var(--red-6)",
+                                        rx.cond(
+                                            EvaluationState.eval_score < 60, "var(--orange-6)",
+                                            rx.cond(
+                                                EvaluationState.eval_score < 80, "var(--amber-6)",
+                                                rx.cond(
+                                                    EvaluationState.eval_score < 90, "var(--green-6)",
+                                                    "var(--teal-6)"
+                                                )
+                                            )
+                                        )
+                                    ),
+                                    shadow="lg",
+                                ),
+                                width="100%",
+                                mb="1.5em",
+                                animation="bounceIn 0.8s ease-out",
+                            ),
+                            # Texto de aciertos
+                            rx.center(
+                                rx.text(
+                                    f"{AppState.correct_answers_text} {EvaluationState.eval_correct_count} {AppState.of_questions_text} {EvaluationState.eval_total_q} {AppState.questions_text}",
+                                    font_weight="medium",
+                                    text_align="center",
+                                    margin_bottom="1em",
+                                ),
+                                width="100%",
+                            ),
+                            # Mensaje motivacional en dos líneas simétricas (MODIFICADO Y CENTRADO)
+                            rx.center(
+                                rx.vstack(
+                                    rx.text(
+                                        AppState.motivation_text_1,
+                                        font_style="italic",
+                                        font_weight="medium",
+                                        text_align="center",  # Asegura centrado del texto
+                                        color=rx.cond(
+                                            EvaluationState.eval_score >= 80, "var(--teal-9)",
+                                            rx.cond(
+                                                EvaluationState.eval_score >= 60, "var(--green-9)",
+                                                "var(--gray-9)"
+                                            )
+                                        ),
+                                        font_size="1.1em",
+                                    ),
+                                    rx.text(
+                                        AppState.motivation_text_2,
+                                        font_style="italic",
+                                        font_weight="medium",
+                                        text_align="center",  # Asegura centrado del texto
+                                        color=rx.cond(
+                                            EvaluationState.eval_score >= 80, "var(--teal-9)",
+                                            rx.cond(
+                                                EvaluationState.eval_score >= 60, "var(--green-9)",
+                                                "var(--gray-9)"
+                                            )
+                                        ),
+                                        font_size="1.1em",
+                                    ),
+                                    spacing="0",
+                                    width="100%",
+                                    align_items="center",  # Centra los elementos hijos (textos) 
+                                ),
+                                width="100%",
+                                margin_bottom="1.5em",
+                                padding="0 10px",
+                                justify_content="center",  # Asegura centrado horizontal
+                                align_items="center",      # Asegura centrado vertical
+                            ),
+                            # Botones con diferentes colores de fondo pero mismo color de texto (ÁREA AGRANDADA)
+                            rx.center(
+                                rx.hstack(
+                                    rx.button(
+                                        AppState.new_evaluation_button_text,
+                                        on_click=EvaluationState.restart_evaluation,
+                                        color="white",
+                                        background_color="var(--amber-9)",
+                                        size="3",
+                                        width="33%",
+                                        height="64px",  # Doble altura normal
+                                    ),
+                                    rx.button(
+                                        AppState.review_button_text,
+                                        on_click=EvaluationState.review_evaluation,
+                                        color="white",
+                                        background_color="var(--blue-9)",
+                                        size="3",
+                                        width="33%",
+                                        height="64px",  # Doble altura normal
+                                    ),
+                                    spacing="3",
+                                    justify_content="center",
+                                    width="70%",
+                                ),
+                                width="100%",
+                            ),
+                            spacing="4",
+                            align_items="center",
+                            justify_content="center",
+                            padding="1.5em",
+                            width="100%",
+                            max_width="450px",
+                            text_align="center",
+                        ),
+                        width="100%",  # El center ocupa todo el ancho disponible
+                    ),
+                    # Estilos adicionales para el modal
+                    style={"--dialog-overlay-opacity": "0.8"},
+                    animation="zoomIn 0.3s"
+                ),
+                open=EvaluationState.show_result_modal,
+            ),
+            # --- Fin Modal de Resultados ---
+
+            spacing="4",
+            width="100%",
+            max_width="700px",
+            align_items="center"
+        ),
+        padding="2em",
+        width="100%",
+        max_width="800px"
+    )
+
+# --- FIN DE LA FUNCIÓN PARA MOSTRAR LAS PREGUNTAS ACTIVAS ---
+
+# Definimos la función de evaluación directamente aquí para evitar problemas de importación
+def evaluacion_tab():
+    """Contenido de la pestaña de evaluación, muestra formulario o quiz activo."""
+    # Print de debug para renderizado
+    print(f"DEBUG (RENDER evaluacion_tab): Estado ACTUAL -> Curso='{AppState.selected_curso}', Libro='{AppState.selected_libro}', Tema='{AppState.selected_tema}', EvalActiva={EvaluationState.is_eval_active}")
+    
+    # Usamos rx.cond para manejar los valores de repaso
+    return rx.vstack(
+        # Encabezado con robot
+        rx.center(
+            rx.hstack(
+                rx.heading("📝 " + AppState.evaluation_heading_text, size="6"),
+                rx.image(src="/robot_evaluaciones.png", width="80px", height="80px", ml="3em"),
+                width="auto",
+                justify="center",
+                align_items="center",
+                mb="2em",
+            ),
+        ),
+        # Texto introductorio (estilo igual a cuestionario_tab)
+        rx.text(
+            AppState.evaluation_subtitle_text,
+            color="gray.500",
+            mb="2em",
+            text_align="center",
+            max_width="600px",
+        ),
+        # --- LÓGICA CONDICIONAL ---
+        rx.cond(
+            EvaluationState.is_eval_active,  # SI la evaluación está activa...
+            vista_pregunta_activa(),         # ...muestra la vista de la pregunta.
+            # SI NO (la evaluación no está activa)...
+            rx.vstack(                       # ...muestra el formulario de configuración.
+                error_callout(AppState.error_message_ui), # Error general de UI
+                rx.card(
+                    rx.vstack(
+                        rx.select(
+                            AppState.cursos_list, 
+                            placeholder=AppState.select_course_evaluation_text,
+                            value=AppState.selected_curso, 
+                            on_change=AppState.handle_curso_change,
+                            size="3", 
+                            color_scheme=PRIMARY_COLOR_SCHEME, 
+                            width="100%",
+                        ),
+                        rx.select(
+                            AppState.libros_para_curso, 
+                            placeholder=AppState.select_book_evaluation_text,
+                            value=AppState.selected_libro, 
+                            on_change=AppState.handle_libro_change,
+                            size="3", 
+                            color_scheme=PRIMARY_COLOR_SCHEME, 
+                            width="100%",
+                            is_disabled=rx.cond(AppState.selected_curso == "", True, False), 
+                        ),
+                        rx.text_area(
+                            placeholder=AppState.evaluation_topic_placeholder_text,
+                            value=AppState.selected_tema, 
+                            on_change=AppState.set_selected_tema,
+                            size="3", 
+                            min_height="100px", 
+                            width="100%",
+                            is_disabled=rx.cond(AppState.selected_libro == "", True, False), 
+                        ),
+                        rx.button(
+                            rx.cond(
+                                EvaluationState.is_generation_in_progress, 
+                                rx.hstack(rx.spinner(size="2"), rx.text(AppState.generating_evaluation_text)),
+                                rx.hstack(rx.icon("clipboard-check"), rx.text(AppState.generate_evaluation_button_text))
+                            ),
+                            on_click=EvaluationState.generate_evaluation,
+                            size="3", 
+                            color_scheme="purple", 
+                            width="100%", 
+                            margin_top="1em",
+                            is_disabled=rx.cond(
+                                (AppState.selected_tema == "") | EvaluationState.is_generation_in_progress,
+                                True, False
+                            ),
+                        ),
+                       width="100%", 
+                       spacing="4", 
+                       padding="2em",
+                    ),
+                    variant="surface", 
+                    width="100%", 
+                    max_width="500px",
+                ),
+                # Layout del formulario
+                width="100%", 
+                spacing="4", 
+                align_items="center", 
+                padding="1em"
+            )
+        ),
+        # --- FIN LÓGICA CONDICIONAL ---
+        # Layout general de la pestaña (igual a cuestionario_tab)
+        width="100%",
+        spacing="4",
+        align_items="center",
+        padding="1em",
+        margin_top="5em", # Margen igual a cuestionario_tab
+        padding_bottom="5em", # Agregar padding en la parte inferior
+    )
+
+# Importación de Módulos Backend
 BACKEND_AVAILABLE = False
 try:
-    # Asumiendo ejecución desde la raíz del proyecto
     from backend import (
         config_logic,
         db_logic,
@@ -20,8 +752,6 @@ try:
         map_logic,
         eval_logic,
     )
-
-    # Inicializar DB si existe la función
     if hasattr(db_logic, "inicializar_db") and callable(db_logic.inicializar_db):
         db_logic.inicializar_db()
         print("INFO: Base de datos inicializada.")
@@ -39,12 +769,11 @@ except ImportError as e:
         file=sys.stderr,
     )
 
-    # --- Mocks como Fallback ---
     class MockLogic:
         def __getattr__(self, name):
             def _mock_func(*args, **kwargs):
                 print(f"ADVERTENCIA: Usando Mock para '{name}({args=}, {kwargs=})'.")
-                mock_data = {  # Datos Mock actualizados
+                mock_data = {
                     "CURSOS": {"Mock Curso": {"Mock Libro": "mock.pdf"}},
                     "verificar_login": lambda u, p: (u == "test" and p == "123")
                     or (u == "felipe" and p == "1234"),
@@ -54,7 +783,7 @@ except ImportError as e:
                         "puntos": "1. Punto Mock 1...\n2. Punto Mock 2...",
                         "message": "Generado con Mock",
                     },
-                    "generar_resumen_pdf_bytes": lambda *a, **kw: b"%PDF...",  # PDF Dummy bytes
+                    "generar_resumen_pdf_bytes": lambda *a, **kw: b"%PDF...",
                     "generar_nodos_localmente": lambda *a, **kw: {
                         "status": "EXITO",
                         "nodos": [
@@ -111,7 +840,7 @@ except ImportError as e:
     )
     print("ADVERTENCIA: Usando Mocks para la lógica del backend.", file=sys.stderr)
 
-# --- Constantes ---
+# Constantes
 PRIMARY_COLOR_SCHEME = "blue"
 ACCENT_COLOR_SCHEME = "amber"
 FONT_FAMILY = "Poppins, sans-serif"
@@ -119,882 +848,73 @@ GOOGLE_FONT_STYLESHEET = [
     "https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap"
 ]
 
-
-# Add this helper function at the top level, before AppState class
+# Helper Function
 def _curso_sort_key(curso: str) -> tuple:
-    """Helper function to sort cursos in correct order."""
     try:
-        # Split para obtener el número (1ro, 2do, etc.)
         num_str = curso.split()[0]
-        # Eliminar todos los sufijos ordinales conocidos
         sufijos = ["ro", "do", "to", "vo", "mo"]
         for sufijo in sufijos:
             num_str = num_str.replace(sufijo, "")
-        # Convertir a número y asignar prioridad por nivel
         num = int(num_str) if num_str.isdigit() else 99
-        # Básico = 1, Medio = 2, Otro = 9 (para ordenar)
         nivel = "1" if "Básico" in curso else "2" if "Medio" in curso else "9"
         return (nivel, num)
     except Exception as e:
         print(f"Error en _curso_sort_key para '{curso}': {e}")
-        return ("9", 99)  # Valor por defecto para casos problemáticos
+        return ("9", 99)
 
 
-# --- Estado Central ---
-class AppState(rx.State):
-    """Estado central de la aplicación SMART_STUDENT Web."""
-
-    # Autenticación / Usuario
-    username_input: str = ""
-    password_input: str = ""
-    is_logged_in: bool = False
-    login_error_message: str = ""
-    logged_in_username: str = ""
-
-    # Selección de Contenido
-    try:
-        _cursos_data = getattr(config_logic, "CURSOS", {})  # Acceso seguro
-        cursos_dict: Dict[str, Any] = (
-            _cursos_data if isinstance(_cursos_data, dict) else {}
-        )
-        # Modified sorting using custom sort key
-        cursos_list: List[str] = sorted(
-            [str(c) for c in cursos_dict.keys() if isinstance(c, str) and c != "Error"],
-            key=_curso_sort_key,
-        )
-    except Exception as e:
-        print(f"ERROR Cargando CURSOS al inicializar estado: {e}", file=sys.stderr)
-        cursos_dict: Dict[str, Any] = {"Error": {"Carga": "error.pdf"}}
-        cursos_list: List[str] = ["Error al Cargar Cursos"]
-    selected_curso: str = ""
-    selected_libro: str = ""
-    selected_tema: str = ""
-
-    # Estados Funcionalidades
-    is_generating_resumen: bool = False
-    resumen_content: str = ""
-    puntos_content: str = ""
-    include_puntos: bool = False  # Asegurar que el valor por defecto es False
-    is_generating_mapa: bool = False
-    mapa_mermaid_code: str = ""
-    mapa_image_url: str = ""
-    mapa_orientacion_horizontal: bool = (
-        True  # Cambiado a True para que la orientación predeterminada sea horizontal
-    )
-    is_generating_eval: bool = False
-    is_eval_active: bool = False
-    is_reviewing_eval: bool = False
-    eval_preguntas: List[Dict[str, Any]] = []
-    eval_current_idx: int = 0
-    eval_user_answers: Dict[int, Union[str, Set[str]]] = {}
-    eval_score: Optional[float] = None
-    eval_correct_count: int = 0
-    eval_total_q: int = 0
-    is_loading_stats: bool = False
-    stats_history: List[Dict[str, Any]] = []
-    error_message_ui: str = ""
-    active_tab: str = "inicio"
-
-    # --- Computed Vars ---
-    @rx.var
-    def libros_para_curso(self) -> List[str]:
-        """Get list of books for selected course."""
-        if not self.selected_curso or self.selected_curso == "Error al Cargar Cursos":
-            return []
-        try:
-            return list(self.cursos_dict.get(self.selected_curso, {}).keys())
-        except Exception as e:
-            print(f"Error obteniendo libros: {e}")
-            return []
-
-    @rx.var
-    def current_eval_question(self) -> Optional[Dict[str, Any]]:
-        if (
-            self.eval_preguntas and 0 <= self.eval_current_idx < self.eval_total_q
-        ):  # Usar total_q
-            q = self.eval_preguntas[self.eval_current_idx]
-            return q if isinstance(q, dict) else None
-        return None
-
-    @rx.var
-    def is_last_eval_question(self) -> bool:
-        return self.eval_total_q > 0 and self.eval_current_idx >= self.eval_total_q - 1
-
-    @rx.var
-    def is_first_eval_question(self) -> bool:
-        return self.eval_current_idx <= 0
-
-    @rx.var
-    def pdf_url(self) -> str:
-        """Genera la URL del PDF basada en el curso y libro seleccionados."""
-        if not self.selected_curso or not self.selected_libro:
-            return ""
-        try:
-            curso = self.selected_curso.lower().replace(" ", "_")
-            archivo = self.cursos_dict[self.selected_curso][self.selected_libro]
-            return f"/pdfs/{curso}/{archivo}"
-        except Exception as e:
-            print(f"ERROR generando URL PDF: {e}")
-            return ""
-
-    # --- Event Handlers ---
-    def set_active_tab(self, tab: str):
-        """Cambia la pestaña activa y reinicia estados."""
-        if not isinstance(tab, str):
-            return
-
-        # Limpiar las selecciones al cambiar de pestaña
-        self.selected_curso = ""
-        self.selected_libro = ""
-        self.selected_tema = ""
-        self.resumen_content = ""  # Limpiar contenido del resumen
-        self.puntos_content = ""  # Limpiar puntos clave
-        self.include_puntos = False  # Reset a False al cambiar de pestaña
-        self.error_message_ui = ""
-
-        # Limpiar estados específicos de mapas
-        self.mapa_image_url = ""
-        self.mapa_mermaid_code = ""
-
-        # Resetear estados de evaluación
-        self.is_eval_active = False
-        self.is_reviewing_eval = False
-        self.eval_preguntas = []
-        self.eval_user_answers = {}
-        self.eval_score = None
-        self.eval_current_idx = 0
-        self.eval_correct_count = 0
-        self.eval_total_q = 0
-
-        # Resetear estados de generación
-        self.is_generating_resumen = False
-        self.is_generating_mapa = False
-        self.is_generating_eval = False
-
-        # Cambiar pestaña activa
-        self.active_tab = tab
-
-        if tab == "perfil":
-            return AppState.load_stats
-        yield
-
-    def go_to_curso_and_resumen(self, curso: str):
-        if not isinstance(curso, str) or not curso:
-            return
-        self.selected_curso = curso
-        self.selected_libro = ""
-        self.clear_selection_and_results()
-        self.active_tab = "resumen"
-        yield
-
-    def handle_login(self):
-        self.login_error_message = ""
-        self.error_message_ui = ""
-        if not self.username_input or not self.password_input:
-            self.login_error_message = "Ingresa usuario y contraseña."
-            return
-
-        # Permitir usuarios de prueba incluso cuando el backend no está disponible
-        if (self.username_input == "felipe" and self.password_input == "1234") or (
-            self.username_input == "test" and self.password_input == "123"
-        ):
-            self.is_logged_in = True
-            self.logged_in_username = self.username_input
-            self.username_input = self.password_input = ""
-            self.active_tab = "inicio"
-            yield
-            return
-
-        # Verificar si el backend está disponible antes de intentar el login
-        if not BACKEND_AVAILABLE:
-            self.login_error_message = "El servicio de autenticación no está disponible. Intenta de nuevo más tarde."
-            # Mostramos instrucciones para usar cuentas de prueba
-            self.login_error_message += (
-                " Puede usar las cuentas de prueba: felipe/1234 o test/123."
-            )
-            yield
-            return
-
-        # Verificar si la función de login existe
-        if not hasattr(login_logic, "verificar_login") or not callable(
-            login_logic.verificar_login
-        ):
-            self.login_error_message = (
-                "Error en el servicio de autenticación. Contacta al administrador."
-            )
-            yield
-            return
-
-        # Intentar verificar el login
-        try:
-            is_valid = login_logic.verificar_login(
-                self.username_input, self.password_input
-            )
-            if is_valid:
-                self.is_logged_in = True
-                self.logged_in_username = self.username_input
-                self.username_input = self.password_input = ""
-                self.active_tab = "inicio"
-            else:
-                self.login_error_message = "Usuario o contraseña incorrectos."
-                self.password_input = ""
-        except Exception as e:
-            print(f"Error login: {e}")
-            self.login_error_message = (
-                "Error en el servicio de autenticación. Por favor intenta más tarde."
-            )
-            self.password_input = ""
-        yield
-
-    def logout(self):
-        try:
-            self.reset()
-        except Exception as e:
-            print(f"Error logout reset: {e}")
-            self.is_logged_in = False
-            self.logged_in_username = ""
-            self.active_tab = "inicio"
-            self.clear_selection_and_results()
-            self.login_error_message = ""
-            yield
-
-    def clear_selection_and_results(self):
-        """Limpia estados relacionados con una selección específica."""
-        self.selected_tema = ""
-        self.selected_libro = ""
-        self.resumen_content = ""
-        self.puntos_content = ""
-        self.mapa_mermaid_code = ""
-        self.mapa_image_url = ""
-        self.error_message_ui = ""
-        self.is_eval_active = False
-        self.is_reviewing_eval = False
-        self.eval_preguntas = []
-        self.eval_user_answers = {}
-        self.eval_score = None
-        self.eval_current_idx = 0
-        self.eval_correct_count = 0
-        self.eval_total_q = 0
-
-        # Recargar lista de cursos si está vacía
-        if not self.cursos_list:
-            try:
-                _cursos_data = getattr(config_logic, "CURSOS", {})
-                self.cursos_dict = (
-                    _cursos_data if isinstance(_cursos_data, dict) else {}
-                )
-                self.cursos_list = sorted(
-                    [
-                        str(c)
-                        for c in self.cursos_dict.keys()
-                        if isinstance(c, str) and c != "Error"
-                    ],
-                    key=_curso_sort_key,
-                )
-            except Exception as e:
-                print(f"ERROR Recargando cursos: {e}", file=sys.stderr)
-                self.cursos_dict = {"Error": {"Carga": "error.pdf"}}
-                self.cursos_list = ["Error al Cargar Cursos"]
-
-    def handle_curso_change(self, new_curso: str):
-        """Maneja el cambio de curso seleccionado."""
-        self.selected_curso = new_curso
-        self.selected_libro = ""  # Reset libro cuando cambia el curso
-        self.selected_tema = ""  # Reset tema también
-        self.error_message_ui = ""
-        yield
-
-    def handle_libro_change(self, new_libro: str):
-        """Maneja el cambio de libro seleccionado."""
-        self.selected_libro = new_libro
-        self.selected_tema = ""  # Reset tema cuando cambia el libro
-        self.error_message_ui = ""
-        yield
-
-    def handle_libros_curso_change(self, new_curso: str):
-        """Maneja el cambio de curso en la pestaña de libros."""
-        self.selected_curso = new_curso
-        self.selected_libro = ""  # Reset libro cuando cambia el curso
-        self.error_message_ui = ""
-        yield
-
-    def handle_libros_libro_change(self, new_libro: str):
-        """Maneja el cambio de libro en la pestaña de libros."""
-        self.selected_libro = new_libro
-        self.error_message_ui = ""
-        yield
-
-    def set_selected_tema(self, new_tema: str):
-        if not isinstance(new_tema, str):
-            return
-        self.selected_tema = new_tema
-        yield
-
-    def set_include_puntos(self, value: bool):
-        if not isinstance(value, bool):
-            return
-        self.include_puntos = value
-        yield
-
-    def set_mapa_orientacion(self, value: bool):
-        """Cambia la orientación del mapa entre horizontal y vertical."""
-        if not isinstance(value, bool):
-            return
-        self.mapa_orientacion_horizontal = value
-        # Limpiar la visualización actual del mapa para obligar a regenerarlo
-        self.mapa_image_url = ""
-        self.mapa_mermaid_code = ""
-        yield
-
-    def clear_map(self):
-        """Limpia el mapa actual."""
-        self.mapa_image_url = ""
-        self.mapa_mermaid_code = ""
-        self.error_message_ui = ""
-        yield
-
-    async def generate_summary(self):
-        if not self.selected_curso or not self.selected_libro or not self.selected_tema:
-            self.error_message_ui = "Selecciona curso, libro y tema."
-            yield
-            return
-        if not BACKEND_AVAILABLE:
-            self.error_message_ui = "Servicio no disponible."
-            yield
-            return
-
-        self.is_generating_resumen = True
-        self.resumen_content = ""
-        self.puntos_content = ""  # Limpiar puntos anteriores
-        self.error_message_ui = ""
-        self.is_eval_active = False
-        self.is_reviewing_eval = False
-        self.eval_preguntas = []
-        self.eval_user_answers = {}
-        self.eval_score = None
-        self.eval_current_idx = 0
-        self.eval_correct_count = 0
-        self.eval_total_q = 0
-        yield
-        try:
-            if not hasattr(resumen_logic, "generar_resumen_logica"):
-                raise AttributeError("Falta resumen_logic.generar_resumen_logica")
-
-            result = resumen_logic.generar_resumen_logica(
-                self.selected_curso,
-                self.selected_libro,
-                self.selected_tema.strip(),
-                self.include_puntos,  # Respetar el estado del switch
-            )
-
-            if isinstance(result, dict) and result.get("status") == "EXITO":
-                self.resumen_content = result.get("resumen", "")
-                # Mostrar puntos solo si el switch está activado
-                if self.include_puntos:
-                    puntos = result.get("puntos")
-                    self.puntos_content = (
-                        puntos if isinstance(puntos, str) and puntos else ""
-                    )
-                else:
-                    self.puntos_content = ""  # Asegurar que no se muestran puntos
-            else:
-                self.error_message_ui = (
-                    result.get("message", "Error resumen.")
-                    if isinstance(result, dict)
-                    else "Error respuesta."
-                )
-        except AttributeError as ae:
-            self.error_message_ui = f"Error config resumen_logic: {ae}"
-            print(f"ERROR: {self.error_message_ui}")
-        except Exception as e:
-            self.error_message_ui = f"Error crítico resumen: {str(e)}"
-            print(f"ERROR G-SUM: {traceback.format_exc()}")
-        finally:
-            self.is_generating_resumen = False
-            yield
-
-    async def generate_map(self):
-        """Genera un mapa conceptual para el tema seleccionado."""
-        if not self.selected_tema:
-            self.error_message_ui = "Ingresa un tema."
-            yield
-            return
-        if not BACKEND_AVAILABLE:
-            self.error_message_ui = "Servicio no disponible."
-            yield
-            return
-
-        self.is_generating_mapa = True
-        self.error_message_ui = ""
-        self.mapa_image_url = ""
-        yield
-        try:
-            # Verificar que las funciones existan antes de llamarlas
-            if not all(
-                hasattr(map_logic, fn)
-                for fn in [
-                    "generar_nodos_localmente",
-                    "generar_mermaid_code",
-                    "generar_visualizacion_html",
-                ]
-            ):
-                raise AttributeError("Funciones de map_logic faltantes.")
-
-            # La función generar_nodos_localmente retorna un diccionario, debemos extraer los nodos
-            resultado_nodos = map_logic.generar_nodos_localmente(
-                self.selected_tema.strip()
-            )
-
-            # Verificar si el resultado es un diccionario con la estructura esperada
-            if (
-                not isinstance(resultado_nodos, dict)
-                or "status" not in resultado_nodos
-                or "nodos" not in resultado_nodos
-            ):
-                self.error_message_ui = "Formato de nodos inesperado."
-                return
-
-            # Verificar si la generación fue exitosa
-            if resultado_nodos["status"] != "EXITO":
-                self.error_message_ui = resultado_nodos.get(
-                    "message", "Error al generar nodos."
-                )
-                return
-
-            # Extraer los nodos del diccionario
-            nodos = resultado_nodos["nodos"]
-
-            if not nodos:
-                self.error_message_ui = "No se generaron nodos."
-            else:
-                # Ahora convertimos los nodos a formato de texto para generar el código Mermaid
-                # Primero preparamos una representación textual de los nodos
-                estructura_texto = (
-                    "- Nodo Central: " + self.selected_tema.strip() + "\n"
-                )
-
-                for nodo in nodos:
-                    titulo = nodo.get("titulo", "")
-                    if titulo:
-                        estructura_texto += f"  - Nodo Secundario: {titulo}\n"
-                        subnodos = nodo.get("subnodos", [])
-                        for subnodo in subnodos:
-                            estructura_texto += f"    - Nodo Terciario: {subnodo}\n"
-
-                # CORREGIDO: Invertir la lógica aquí para que coincida con el nombre de la variable
-                # Si mapa_orientacion_horizontal es True, usamos LR (horizontal)
-                # Si es False, usamos TD (vertical)
-                orientacion = "LR" if self.mapa_orientacion_horizontal else "TD"
-
-                # Generar el código Mermaid a partir de la estructura de texto
-                mermaid_code, error = map_logic.generar_mermaid_code(
-                    estructura_texto, orientacion
-                )
-
-                if error or not mermaid_code:
-                    self.error_message_ui = error or "Error código mapa."
-                else:
-                    self.mapa_mermaid_code = mermaid_code
-                    html_url = map_logic.generar_visualizacion_html(
-                        mermaid_code, self.selected_tema.strip()
-                    )
-                    if not html_url:
-                        self.error_message_ui = "Error visualización."
-                    else:
-                        self.mapa_image_url = html_url
-                        self.active_tab = "mapa"
-        except AttributeError as ae:
-            self.error_message_ui = f"Error config map_logic: {ae}"
-            print(f"ERROR: {self.error_message_ui}")
-        except Exception as e:
-            self.error_message_ui = f"Error generando mapa: {str(e)}"
-            print(f"ERROR G-MAP: {traceback.format_exc()}")
-        finally:
-            self.is_generating_mapa = False
-            if not self.mapa_image_url and not self.error_message_ui:
-                self.error_message_ui = "No se generó visualización."
-            yield
-
-    async def generate_evaluation(self):
-        if not self.selected_curso or not self.selected_libro or not self.selected_tema:
-            self.error_message_ui = "Selecciona curso, libro y tema."
-            yield
-            return
-        if not BACKEND_AVAILABLE:
-            self.error_message_ui = "Servicio no disponible."
-            yield
-            return
-
-        self.is_generating_eval = True
-        self.error_message_ui = ""
-        self.is_eval_active = False
-        self.is_reviewing_eval = False
-        self.eval_preguntas = []
-        self.eval_current_idx = 0
-        self.eval_correct_count = 0
-        self.eval_total_q = 0
-        self.eval_user_answers = {}
-        self.eval_score = None
-        yield
-
-        try:
-            if not hasattr(eval_logic, "generar_evaluacion_logica"):
-                raise AttributeError("Falta eval_logic.generar_evaluacion_logica")
-
-            # Llamar al backend para generar preguntas basadas en el tema
-            result = eval_logic.generar_evaluacion_logica(
-                curso=self.selected_curso,
-                libro=self.selected_libro,
-                tema=self.selected_tema.strip()
-            )
-
-            if isinstance(result, dict) and result.get("status") == "EXITO":
-                preguntas = result.get("preguntas")
-                if isinstance(preguntas, list) and preguntas:
-                    self.eval_preguntas = [
-                        p for p in preguntas if isinstance(p, dict) and "pregunta" in p
-                    ]
-                    if not self.eval_preguntas:
-                        self.error_message_ui = "Preguntas inválidas."
-                        self.is_eval_active = False
-                    else:
-                        self.eval_total_q = len(self.eval_preguntas)
-                        self.is_eval_active = True
-                        self.active_tab = "evaluacion"
-                else:
-                    self.error_message_ui = "No se generaron preguntas."
-                    self.is_eval_active = False
-            else:
-                self.error_message_ui = (
-                    result.get("message", "Error evaluación.")
-                    if isinstance(result, dict)
-                    else "Error respuesta."
-                )
-        except AttributeError as ae:
-            self.error_message_ui = f"Error config eval_logic: {ae}"
-            print(f"ERROR: {self.error_message_ui}")
-        except Exception as e:
-            self.error_message_ui = f"Error crítico evaluación: {str(e)}"
-            print(f"ERROR G-EVAL: {traceback.format_exc()}")
-        finally:
-            self.is_generating_eval = False
-            yield
-
-    def set_eval_answer(self, answer_value: Union[str, List[str]]):
-        if not self.is_eval_active or self.is_reviewing_eval or not self.eval_preguntas:
-            return
-        idx = self.eval_current_idx
-        if not (0 <= idx < len(self.eval_preguntas)):
-            return
-        try:
-            q = self.eval_preguntas[idx]
-            if not isinstance(q, dict):
-                return
-            q_type = q.get("tipo", "")
-            if q_type == "opcion_multiple":
-                if isinstance(answer_value, str):
-                    self.eval_user_answers[idx] = answer_value
-            elif q_type == "seleccion_multiple":
-                if isinstance(answer_value, list):
-                    self.eval_user_answers[idx] = set(str(v) for v in answer_value)
-        except Exception as e:
-            print(f"Error set_eval_answer idx {idx}: {e}")
-        yield
-
-    def next_eval_question(self):
-        if self.eval_preguntas and self.eval_current_idx < self.eval_total_q - 1:
-            self.eval_current_idx += 1
-            yield
-
-    def prev_eval_question(self):
-        if self.eval_current_idx > 0:
-            self.eval_current_idx -= 1
-            yield
-
-    def calculate_eval_score(self):
-        if not self.eval_preguntas:
-            self.error_message_ui = "No hay preguntas."
-            yield
-            return
-        try:
-            correct = 0
-            total = self.eval_total_q
-            if total == 0:
-                self.error_message_ui = "No hay preguntas válidas."
-                yield
-                return
-            for i, q_dict in enumerate(self.eval_preguntas):
-                if not isinstance(q_dict, dict):
-                    continue
-                u_ans = self.eval_user_answers.get(i)
-                c_ans = q_dict.get("respuesta_correcta")
-                q_type = q_dict.get("tipo")
-                correct_inc = 0
-                if (
-                    q_type == "opcion_multiple"
-                    and isinstance(u_ans, str)
-                    and u_ans == c_ans
-                ):
-                    correct_inc = 1
-                elif q_type == "seleccion_multiple":
-                    c_set = set(c_ans) if isinstance(c_ans, list) else set()
-                    u_set = u_ans if isinstance(u_ans, set) else set()
-                    if u_set and c_set and u_set == c_set:
-                        correct_inc = 1
-                correct += correct_inc
-            self.eval_correct_count = correct
-            self.eval_score = (correct / total) * 100.0
-            self.is_reviewing_eval = True
-            self.is_eval_active = False
-            self.eval_current_idx = 0
-            if (
-                self.logged_in_username
-                and BACKEND_AVAILABLE
-                and hasattr(db_logic, "guardar_resultado_evaluacion")
-            ):
-                try:
-                    db_logic.guardar_resultado_evaluacion(
-                        self.logged_in_username,
-                        self.selected_curso or "N/A",
-                        self.selected_libro or "N/A",
-                        self.selected_tema or "N/A",
-                        self.eval_score,
-                    )
-                except Exception as db_e:
-                    print(f"Error guardando DB: {db_e}")
-        except Exception as calc_e:
-            print(f"Error cálculo score: {calc_e}")
-            self.error_message_ui = "Error cálculo puntaje."
-            self.is_reviewing_eval = False
-            self.is_eval_active = True
-        yield
-
-    async def load_stats(self):
-        if not self.logged_in_username:
-            self.stats_history = []
-            self.is_loading_stats = False
-            yield
-            return
-        if not BACKEND_AVAILABLE:
-            self.error_message_ui = "Servicio no disponible."
-            self.is_loading_stats = False
-            yield
-            return
-
-        self.is_loading_stats = True
-        self.stats_history = []
-        self.error_message_ui = ""
-        yield
-        try:
-            if not hasattr(db_logic, "obtener_estadisticas_usuario"):
-                raise AttributeError("Falta db_logic.obtener_estadisticas_usuario")
-            stats_raw = db_logic.obtener_estadisticas_usuario(self.logged_in_username)
-            if isinstance(stats_raw, list):
-                self.stats_history = [
-                    {
-                        "tema": s.get("tema", "N/A"),
-                        "curso": s.get("curso", "N/A"),
-                        "libro": s.get("libro", "N/A"),
-                        "puntuacion": (
-                            float(s.get("puntuacion", 0.0))
-                            if s.get("puntuacion") is not None
-                            else 0.0
-                        ),
-                        "fecha": s.get("fecha", "N/A"),
-                    }
-                    for s in stats_raw
-                    if isinstance(s, dict)
-                ]
-            else:
-                print(f"WARN: Stats inesperados: {type(stats_raw)}")
-                self.stats_history = []
-                self.error_message_ui = "Error datos historial."
-        except AttributeError as ae:
-            self.error_message_ui = f"Error config db_logic: {ae}"
-            print(f"ERROR: {self.error_message_ui}")
-        except Exception as e:
-            print(f"Error cargando stats: {e}")
-            self.error_message_ui = "No se pudo cargar historial."
-            self.stats_history = []
-        finally:
-            self.is_loading_stats = False
-            yield
-
-    async def download_pdf(self):
-        if not self.resumen_content:
-            self.error_message_ui = "No hay resumen."
-            yield
-            return
-
-        try:
-            if not hasattr(resumen_logic, "generar_resumen_pdf_bytes"):
-                raise AttributeError("Falta resumen_logic.generar_resumen_pdf_bytes")
-
-            # Sanitizar nombre de archivo
-            s_tema = re.sub(r'[\\/*?:"<>|]', "", self.selected_tema or "t")
-            s_lib = re.sub(r'[\\/*?:"<>|]', "", self.selected_libro or "l")
-            s_cur = re.sub(r'[\\/*?:"<>|]', "", self.selected_curso or "c")
-
-            # Verificar si FPDF está disponible intentando generar el PDF
-            try:
-                pdf_bytes = resumen_logic.generar_resumen_pdf_bytes(
-                    resumen_txt=self.resumen_content,
-                    puntos_txt=self.puntos_content if self.include_puntos else "",
-                    titulo=f"Resumen: {self.selected_tema or 'General'}",
-                    subtitulo=f"Curso: {self.selected_curso or 'N/A'} - Libro: {self.selected_libro or 'N/A'}",
-                )
-
-                if isinstance(pdf_bytes, bytes) and pdf_bytes:
-                    fname = f"Resumen_{s_cur}_{s_lib}_{s_tema}.pdf".replace(" ", "_")[
-                        :100
-                    ]
-                    yield rx.download(data=pdf_bytes, filename=fname)
-                    return
-                else:
-                    print("PDF bytes inválidos. Intentando alternativa HTML...")
-                    # Continuar hacia el fallback HTML
-            except Exception as pdf_e:
-                print(f"Error en generación de PDF, usando fallback HTML: {pdf_e}")
-                # Continuar hacia el fallback HTML
-
-            # Fallback: Generar HTML si PDF falla
-            html_content = f"""<!DOCTYPE html>
-            <html lang="es">
-            <head>
-                <meta charset="UTF-8">
-                <title>Resumen: {s_tema}</title>
-                <style>
-                    body {{ font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }}
-                    h1 {{ color: #2c5282; }}
-                    h2 {{ color: #2b6cb0; margin-top: 20px; }}
-                    .content {{ margin-top: 20px; }}
-                    .footer {{ margin-top: 30px; font-size: 0.8em; color: #718096; }}
-                </style>
-            </head>
-            <body>
-                <h1>Resumen: {self.selected_tema or 'General'}</h1>
-                <h2>Curso: {self.selected_curso or 'N/A'} - Libro: {self.selected_libro or 'N/A'}</h2>
-                <div class="content">
-                    <h3>Resumen:</h3>
-                    <div>{self.resumen_content.replace('\n', '<br>')}</div>
-                </div>
-                {f'<div class="content"><h3>Puntos Clave:</h3><div>{self.puntos_content.replace("\\n", "<br>")}</div></div>' if self.include_puntos and self.puntos_content else ''}
-                <div class="footer">Generado por SMART_STUDENT {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}</div>
-            </body>
-            </html>"""
-
-            fname = f"Resumen_{s_cur}_{s_lib}_{s_tema}.html".replace(" ", "_")[:100]
-            yield rx.download(data=html_content.encode("utf-8"), filename=fname)
-            print(f"Descargado resumen como HTML: {fname}")
-
-        except Exception as e:
-            self.error_message_ui = f"Error descarga: {str(e)}"
-            print(f"ERROR DWNLD PDF/HTML: {traceback.format_exc()}")
-            yield
-
-    async def download_map_pdf(self):
-        """Descarga el mapa conceptual actual en formato PDF."""
-        if not self.mapa_image_url:
-            self.error_message_ui = "No hay mapa para descargar."
-            yield
-            return
-
-        try:
-            # Sanitizar nombre de archivo
-            s_tema = re.sub(r'[\\/*?:"<>|]', "", self.selected_tema or "tema")
-            s_lib = re.sub(r'[\\/*?:"<>|]', "", self.selected_libro or "libro")
-            s_cur = re.sub(r'[\\/*?:"<>|]', "", self.selected_curso or "curso")
-
-            # Verificar que existe la función de generación de PDF
-            if hasattr(map_logic, "generar_mapa_pdf_bytes"):
-                try:
-                    # Llamar directamente al PDF sin fallback a HTML
-                    pdf_bytes = map_logic.generar_mapa_pdf_bytes(
-                        mermaid_code=self.mapa_mermaid_code,
-                        tema=self.selected_tema,
-                        curso=self.selected_curso,
-                        libro=self.selected_libro,
-                        html_url=self.mapa_image_url,
-                    )
-
-                    if isinstance(pdf_bytes, bytes) and pdf_bytes:
-                        fname = f"Mapa_{s_cur}_{s_lib}_{s_tema}.pdf".replace(" ", "_")[
-                            :100
-                        ]
-                        yield rx.download(data=pdf_bytes, filename=fname)
-                        return
-                    else:
-                        self.error_message_ui = (
-                            "Error al generar PDF del mapa conceptual."
-                        )
-                        print("ERROR: PDF bytes inválidos para el mapa")
-                except Exception as e:
-                    self.error_message_ui = f"Error al generar PDF: {str(e)}"
-                    print(f"ERROR con map_logic.generar_mapa_pdf_bytes: {e}")
-            else:
-                self.error_message_ui = (
-                    "La función para generar PDF no está disponible."
-                )
-                print("ERROR: Función generar_mapa_pdf_bytes no encontrada")
-
-        except Exception as e:
-            self.error_message_ui = f"Error descarga: {str(e)}"
-            print(f"ERROR DWNLD MAP PDF: {traceback.format_exc()}")
-            yield
-
-
-# --- Funciones Helper para UI ---
+# Funciones Helper para UI
 def create_card(
     title, icon, description, action_text, on_click, color_scheme=PRIMARY_COLOR_SCHEME
 ):
     return rx.card(
         rx.vstack(
-            rx.icon(icon, size=48, color=f"var(--{color_scheme}-9)"),
-            rx.heading(title, size="5", mt="0.7em", text_align="center", flex_grow=0),
+            rx.box(
+                rx.icon(icon, size=52, color=f"var(--{color_scheme}-9)"),
+                width="100%",
+                display="flex",
+                justify_content="center",
+            ),
+            rx.heading(title, size="4", mt="0.5em", text_align="center", flex_grow=0),
             rx.text(
                 description,
                 text_align="center",
-                size="3",
+                size="2",
                 color_scheme="gray",
                 flex_grow=1,
             ),
-            # Espacio adicional entre el texto y el botón
-            rx.spacer(height="0.75em"),  # Reducido de 1.5em a 0.75em (la mitad)
-            # Centrar el botón horizontalmente en la tarjeta
+            rx.spacer(height="0.8em"),
             rx.box(
                 rx.button(
                     action_text,
                     on_click=on_click,
-                    size="3",
+                    size="2",
                     variant="soft",
                     color_scheme=color_scheme,
-                    width="200px",  # Ancho fijo para el botón
+                    width="180px",
                 ),
                 width="100%",
                 display="flex",
-                justify_content="center",  # Centrar el botón horizontalmente
+                justify_content="center",
             ),
             align="center",
             justify="between",
-            p="2em",
-            spacing="4",
+            p="1.8em",
+            spacing="3",
             h="100%",
         ),
         variant="surface",
         size="3",
-        h="500px",
-        w="2500px",
+        h="320px",
+        min_width="300px",
         as_child=True,
     )
-
 
 def error_callout(message: rx.Var[str]):
     return rx.cond(
         message != "",
         rx.callout.root(
-            rx.callout.icon(
-                rx.icon("triangle-alert")
-            ),  # Changed from alert-triangle to triangle-alert
+            rx.callout.icon(rx.icon("triangle-alert")),
             rx.callout.text(message),
             color_scheme="red",
             role="alert",
@@ -1004,59 +924,71 @@ def error_callout(message: rx.Var[str]):
         ),
     )
 
-
-def nav_button(text: str, tab_name: str, active_tab: rx.Var[str]):
+def nav_button(text: str, tab_name: rx.Var[str], active_tab: rx.Var[str]):
     return rx.button(
         text,
-        on_click=lambda: AppState.set_active_tab(tab_name),
+        on_click=lambda tab=tab_name: AppState.set_active_tab(tab),
         variant=rx.cond(active_tab == tab_name, "solid", "ghost"),
         color_scheme=rx.cond(active_tab == tab_name, PRIMARY_COLOR_SCHEME, "gray"),
         size="2",
     )
 
-
-# --- Definición de Páginas/Pestañas ---
-
-
+# Definición de Páginas/Pestañas
 def login_page():
-    """Página de inicio de sesión."""
-    return rx.center(
-        rx.vstack(
-            # Logo y Título
-            rx.hstack(
-                rx.icon("graduation-cap", size=36, color_scheme=PRIMARY_COLOR_SCHEME),
-                rx.vstack(
-                    rx.heading(
-                        "SMART_STUDENT", size="8", weight="bold", text_align="center"
-                    ),
-                    rx.spacer(height="0.5em"),
-                    rx.text(
-                        "Aprende, Crea y Destaca",
-                        color_scheme="gray",
-                        text_align="center",
-                    ),
-                    spacing="0",
-                    align_items="center",  # Cambiado de "start" a "center"
-                ),
-                spacing="3",
-                align_items="center",
-                justify="center",  # Cambiado de "start" a "center"
-                margin_bottom="1em",
-                width="100%",
-            ),
-            # Formulario de Login dentro de una Card
-            rx.card(
-                rx.form(  # Usar rx.form para semántica y posible manejo de submit
+    # Añadimos los botones de idioma y modo oscuro en la parte superior derecha
+    header_buttons = rx.hstack(
+        rx.button(
+            rx.cond(AppState.current_language == "es", "ES", "EN"),
+            variant="soft",
+            size="2",
+            on_click=AppState.toggle_language,
+            aria_label=AppState.switch_language_text,
+        ),
+        rx.color_mode.switch(size="2"),
+        spacing="2",
+        position="absolute",
+        top="1em",
+        right="1em",
+        z_index="5",
+    )
+    
+    return rx.box(
+        header_buttons,
+        rx.center(
+            rx.vstack(
+                rx.hstack(
+                    rx.icon("graduation-cap", size=36, color_scheme=PRIMARY_COLOR_SCHEME),
                     rx.vstack(
-                        rx.heading("Iniciar Sesión", size="6", text_align="center"),
+                        rx.heading(
+                            AppState.header_title_text, size="8", weight="bold", text_align="center"
+                        ),
+                        rx.spacer(height="0.5em"),
                         rx.text(
-                            "Accede a tus aprendizajes",
+                            AppState.app_tagline_text,
+                            color_scheme="gray",
+                            text_align="center",
+                        ),
+                        spacing="0",
+                        align_items="center",
+                    ),
+                    spacing="3",
+                    align_items="center",
+                    justify="center",
+                    margin_bottom="1em",
+                    width="100%",
+                ),
+            rx.card(
+                rx.form(
+                    rx.vstack(
+                        rx.heading(AppState.login_title_text, size="6", text_align="center"),
+                        rx.text(
+                            AppState.login_subtitle_text,
                             margin_bottom="1.5em",
                             color_scheme="gray",
                             text_align="center",
                         ),
                         rx.input(
-                            placeholder="Usuario",
+                            placeholder=AppState.username_placeholder_text,
                             id="username",
                             on_change=AppState.set_username_input,
                             value=AppState.username_input,
@@ -1066,7 +998,7 @@ def login_page():
                             auto_focus=True,
                         ),
                         rx.input(
-                            placeholder="Contraseña",
+                            placeholder=AppState.password_placeholder_text,
                             id="password",
                             type="password",
                             on_change=AppState.set_password_input,
@@ -1076,10 +1008,9 @@ def login_page():
                             required=True,
                         ),
                         rx.cond(
-                            AppState.login_error_message
-                            != "",  # Mostrar error de login
+                            AppState.login_error_message != "",
                             rx.text(
-                                AppState.login_error_message,
+                                AppState.login_error_text,
                                 color="red",
                                 size="2",
                                 mt="0.5em",
@@ -1087,15 +1018,15 @@ def login_page():
                             ),
                         ),
                         rx.button(
-                            "Iniciar Sesión",
+                            AppState.login_button_text,
                             type="submit",
-                            width="100%",  # type="submit"
+                            width="100%",
                             color_scheme=PRIMARY_COLOR_SCHEME,
                             size="3",
                             margin_top="1em",
                         ),
                         rx.link(
-                            "¿Olvidaste tu contraseña?",
+                            AppState.forgot_password_text,
                             size="2",
                             color_scheme="gray",
                             mt="1em",
@@ -1111,11 +1042,11 @@ def login_page():
                         width="100%",
                     ),
                     on_submit=AppState.handle_login,
-                    reset_on_submit=False,  # No resetear campos si falla
+                    reset_on_submit=False,
                 ),
                 width="400px",
                 max_width="90%",
-            ),  # Fin Card
+            ),
             spacing="4",
             width="100%",
             height="100vh",
@@ -1125,772 +1056,1650 @@ def login_page():
         ),
         width="100%",
         height="100%",
+    ),
+    width="100%",
+    height="100%",
+    position="relative",
     )
 
-
 def inicio_tab():
+    """Contenido de la pestaña de inicio."""
     return rx.vstack(
-        # Título y subtítulo centrados
+        # Encabezado con robot más alejado hacia la derecha
         rx.center(
-            rx.vstack(
-                # Añadir espacio superior de 0.5em antes del título
-                rx.spacer(height="0.5em"),
-                rx.heading(
-                    "Bienvenido a SMART_STUDENT",
-                    size="7",
-                    mb="0.5em",
-                    text_align="center",
-                ),
-                rx.text(
-                    "Tu asistente de estudio inteligente potenciado por IA.",
-                    mb="0.5em",
-                    size="4",
-                    color_scheme="gray",
-                    text_align="center",
-                ),
-                width="100%",
+            rx.hstack(
+                rx.heading(AppState.welcome_text, size="6"),
+                rx.image(src="/robot_turquesa.png", width="80px", height="80px", ml="3em"),
+                width="auto",
+                justify="center",
                 align_items="center",
-                mt="1em",
-            )
+                mb="2em",
+            ),
         ),
-        # Contenedor centrado para las tarjetas
+        
+        rx.text(
+            AppState.welcome_subtitle_text,
+            color="gray.500",
+            mb="2em",
+            text_align="center",
+            max_width="800px",
+        ),
         rx.center(
-            rx.box(
+            rx.card(
                 rx.vstack(
                     rx.grid(
                         create_card(
-                            "Libros",
+                            AppState.digital_books_title,
                             "book",
-                            "Accede a tus libros digitales.",
-                            "Ver Libros",
+                            AppState.digital_books_desc,
+                            AppState.view_books_text,
                             lambda: AppState.set_active_tab("libros"),
                             "green",
                         ),
                         create_card(
-                            "Resúmenes",
+                            AppState.intelligent_summaries_title,
                             "file-text",
-                            "Genera resúmenes y puntos clave.",
-                            "Crear Resumen",
+                            AppState.intelligent_summaries_desc,
+                            AppState.create_summary_text,
                             lambda: AppState.set_active_tab("resumen"),
                             PRIMARY_COLOR_SCHEME,
                         ),
                         create_card(
-                            "Mapas Conceptuales",
+                            AppState.concept_maps_title,
                             "git-branch",
-                            "Explora ideas y conexiones.",
-                            "Crear Mapa",
+                            AppState.concept_maps_desc,
+                            AppState.create_map_text,
                             lambda: AppState.set_active_tab("mapa"),
                             ACCENT_COLOR_SCHEME,
                         ),
                         create_card(
-                            "Evaluaciones",
-                            "clipboard-check",
-                            "Pon a prueba tu conocimiento.",
-                            "Evaluar",
-                            lambda: AppState.set_active_tab("evaluacion"),
-                            "purple",  # Cambiado de "green" a "purple" para dar un color distintivo
+                            AppState.questionnaires_title,
+                            "file-question",
+                            AppState.questionnaires_desc,
+                            AppState.create_questionnaire_text,
+                            lambda: AppState.set_active_tab("cuestionario"),
+                            "cyan",
                         ),
-                        columns="2",  # Dos columnas para mostrar 2 tarjetas por fila
+                        create_card(
+                            AppState.assessments_title,
+                            "clipboard-check",
+                            AppState.assessments_desc,
+                            AppState.create_assessment_text,
+                            lambda: AppState.set_active_tab("evaluacion"),
+                            "purple",
+                        ),
+                        columns="3",
                         spacing="4",
                         width="100%",
-                        max_width="1600px",  # Ancho máximo del grid
                     ),
+                    spacing="6",
                     width="100%",
-                    align_items="center",
-                    spacing="4",
+                    padding="2em",
                 ),
+                variant="surface",
                 width="100%",
-                overflow_x="auto",
-                padding="1em",
+                max_width="1200px",
             )
         ),
-        # Recursos Populares centrados - Ajustado el ancho para que coincida con las tarjetas
         rx.center(
             rx.card(
                 rx.vstack(
                     rx.heading(
-                        "Recursos Populares", size="4", mb="1em", text_align="center"
+                        AppState.popular_resources_text, size="5", mb="1em", text_align="center", color="var(--gray-12)"
                     ),
                     rx.hstack(
                         rx.foreach(
-                            ["Matemáticas", "Ciencias", "Historia", "Lenguaje"],
-                            lambda c: rx.cond(
-                                AppState.cursos_list.contains(c),
-                                rx.button(
-                                    c,
-                                    on_click=lambda curso=c: AppState.go_to_curso_and_resumen(
-                                        curso
-                                    ),
+                            [AppState.mathematics_text, AppState.science_text, AppState.history_text, AppState.language_text],
+                    lambda c: rx.cond(
+                        AppState.cursos_list.contains(c),
+                        rx.button(
+                            c,
+                            # --- CORRECCIÓN AQUÍ ---
+                            # Pasamos la referencia al método y el argumento capturado 'c'
+                            on_click=lambda curso=c: AppState.go_to_curso_and_resumen(curso),
                                     variant="soft",
-                                    color_scheme="gray",
-                                    size="2",
+                                    color_scheme=PRIMARY_COLOR_SCHEME,
+                                    size="3",
                                 ),
                                 rx.fragment(),
                             ),
                         ),
                         spacing="3",
-                        justify="center",  # Centrar los botones
+                        justify="center",
                         wrap="wrap",
                     ),
-                    p="1.5em",
                     width="100%",
-                    align="center",  # Alinear todo al centro
+                    align="center",
+                    padding="2em",
                 ),
-                mt="2.5em",
                 variant="surface",
-                width="100%",  # Cambiado de 80% a 100% para consistencia con las tarjetas superiores
-                max_width="1600px",  # Ajustado para coincidir con el grid de tarjetas
+                width="100%",
+                max_width="800px",
+                margin_top="2em",
             )
         ),
         width="100%",
-        m="0 auto",
-        p="2em",
-        spacing="5",
+        spacing="4",
         align_items="center",
+        padding="1em",
+        margin_top="1em",
     )
-
 
 def resumen_tab():
-    """Contenido de la pestaña de resumen."""
-    return rx.center(  # Envolvemos todo en un centro para alineación horizontal
-        rx.flex(  # Usamos flex para centrado vertical similar a la pestaña de libros
-            rx.vstack(
-                # Espacio adicional para separar del menú
-                rx.spacer(
-                    height="60em"
-                ),  # Incrementado el espaciador para bajar todo el contenido unos 30 cm más
-                # Título centrado
+    """Contenido de la pestaña de resúmenes."""
+    return rx.vstack(
+        # Encabezado con robot
+        rx.center(
+            rx.hstack(
                 rx.heading(
-                    "🎯 Turbo Aprendizaje", size="6", mb="2em", text_align="center"
+                    "📄 " + rx.cond(
+                        AppState.current_language == "es",
+                        "Genera Resúmenes Inteligentes",
+                        "Generate Smart Summaries"
+                    ), 
+                    size="6"
                 ),
-                # Mostrar error si existe
-                error_callout(AppState.error_message_ui),
-                # Contenedor de selección con ancho fijo
-                rx.vstack(
-                    # Selectores con el mismo ancho que en libros_tab
-                    rx.box(
-                        rx.grid(
-                            rx.select(
-                                AppState.cursos_list,
-                                placeholder="Selecciona un Curso...",
-                                on_change=AppState.handle_curso_change,
-                                value=AppState.selected_curso,
-                                size="3",
-                                variant="soft",
-                                color_scheme=PRIMARY_COLOR_SCHEME,
-                                w="100%",
-                            ),
-                            rx.select(
-                                AppState.libros_para_curso,
-                                placeholder="Selecciona un Libro...",
-                                on_change=AppState.handle_libro_change,
-                                value=AppState.selected_libro,
-                                size="3",
-                                variant="soft",
-                                color_scheme=PRIMARY_COLOR_SCHEME,
-                                w="100%",
-                                is_disabled=rx.cond(
-                                    (AppState.selected_curso == "")
-                                    | (
-                                        AppState.selected_curso
-                                        == "Error al Cargar Cursos"
-                                    ),
-                                    True,
-                                    False,
-                                ),
-                            ),
-                            # Tema específico como área de texto
-                            rx.text_area(
-                                placeholder="Tema específico...",
-                                on_change=AppState.set_selected_tema,
-                                value=AppState.selected_tema,
-                                size="3",
-                                min_h="6em",
-                                w="100%",
-                                is_disabled=rx.cond(
-                                    AppState.selected_libro == "", True, False
-                                ),
-                            ),
-                            # Una fila por elemento
-                            columns="1",
-                            spacing="4",
-                            w="100%",
-                        ),
-                        width="100%",
-                        max_width="400px",  # Mismo ancho máximo que en libros_tab
+                rx.image(src="/robot_resumen.png", width="80px", height="80px", ml="3em"),
+                width="auto",
+                justify="center",
+                align_items="center",
+                mb="2em",
+            ),
+        ),
+        
+        rx.text(
+            rx.cond(
+                AppState.current_language == "es",
+                "Simplifica temas complejos con resúmenes generados por IA para facilitar tu comprensión y estudio.",
+                "Simplify complex topics with AI-generated summaries to enhance your understanding and study."
+            ),
+            color="gray.500",
+            mb="2em",
+            text_align="center",
+            max_width="600px",
+        ),
+        error_callout(AppState.error_message_ui),
+        rx.card(
+            rx.vstack(
+                rx.select(
+                    AppState.cursos_list,
+                    placeholder=rx.cond(
+                        AppState.current_language == "es",
+                        "Selecciona un Curso...",
+                        "Select a Course..."
                     ),
-                    # Fila de opciones y botón
-                    rx.box(
-                        rx.hstack(
-                            rx.hstack(
-                                rx.switch(
-                                    is_checked=AppState.include_puntos,
-                                    on_change=AppState.set_include_puntos,
-                                    size="2",
-                                    color_scheme=ACCENT_COLOR_SCHEME,
-                                    disabled=rx.cond(
-                                        AppState.selected_tema == "", True, False
-                                    ),
-                                ),
-                                rx.text("Puntos Relevantes", size="2", ml="0.5em"),
-                                spacing="2",
-                                align_items="center",
-                            ),
-                            rx.spacer(),
-                            rx.button(
-                                rx.cond(
-                                    AppState.is_generating_resumen,
-                                    rx.hstack(rx.spinner(size="2"), "Generando..."),
-                                    "Generar Resumen",
-                                ),
-                                on_click=AppState.generate_summary,
-                                size="3",
-                                color_scheme=PRIMARY_COLOR_SCHEME,
-                                is_disabled=rx.cond(
-                                    AppState.is_generating_resumen
-                                    | (AppState.selected_tema == ""),
-                                    True,
-                                    False,
-                                ),
-                            ),
-                            width="100%",
-                            align_items="center",
-                            mt="1em",
-                        ),
-                        width="100%",
-                        max_width="400px",  # Mismo ancho máximo que en libros_tab
+                    value=AppState.selected_curso,
+                    on_change=AppState.handle_curso_change,
+                    size="3",
+                    color_scheme=PRIMARY_COLOR_SCHEME,
+                    width="100%",
+                ),
+                rx.select(
+                    AppState.libros_para_curso,
+                    placeholder=rx.cond(
+                        AppState.current_language == "es",
+                        "Selecciona un Libro...",
+                        "Select a Book..."
                     ),
+                    value=AppState.selected_libro,
+                    on_change=AppState.handle_libro_change,
+                    size="3",
+                    color_scheme=PRIMARY_COLOR_SCHEME,
+                    width="100%",
+                    is_disabled=rx.cond(
+                        (AppState.selected_curso == "") | (AppState.selected_curso == "Error al Cargar Cursos"),
+                        True,
+                        False,
+                    ),
+                ),
+                rx.text_area(
+                    placeholder=rx.cond(
+                        AppState.current_language == "es",
+                        "Tema específico a resumir...",
+                        "Specific topic to summarize..."
+                    ),
+                    value=AppState.selected_tema,
+                    on_change=AppState.set_selected_tema,
+                    size="3",
+                    min_height="100px",
+                    width="100%",
+                    is_disabled=rx.cond(
+                        AppState.selected_libro == "",
+                        True,
+                        False,
+                    ),
+                ),
+                rx.hstack(
+                    rx.hstack(
+                        rx.switch(
+                            is_checked=AppState.include_puntos,
+                            on_change=AppState.set_include_puntos,
+                            size="2",
+                            color_scheme=ACCENT_COLOR_SCHEME,
+                            disabled=rx.cond(
+                                AppState.selected_tema == "", True, False
+                            ),
+                        ),
+                        rx.text(
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Incluir puntos clave",
+                                "Include key points"
+                            ), 
+                            size="2", 
+                            ml="0.5em"
+                        ),
+                        spacing="2",
+                        align_items="center",
+                    ),
+                    rx.spacer(),
                     width="100%",
                     align_items="center",
-                    spacing="4",
+                    margin_top="0.5em",
                 ),
-                # Resultados
-                rx.cond(
-                    (AppState.resumen_content != "") | (AppState.puntos_content != ""),
-                    rx.vstack(
-                        rx.grid(
+                rx.button(
+                    rx.cond(
+                        AppState.is_generating_resumen,
+                        rx.hstack(
+                            rx.spinner(size="2"), 
                             rx.cond(
-                                AppState.resumen_content != "",
-                                rx.box(
-                                    rx.heading(
-                                        "Resumen",
-                                        size="4",
-                                        mb="0.5em",
-                                        text_align="center",
-                                    ),
-                                    rx.box(
-                                        rx.markdown(AppState.resumen_content),
-                                        max_h="55vh",
-                                        overflow_y="auto",
-                                        bg="var(--accent-2)",
-                                        p="1.5em",
-                                        border_radius="large",
-                                        w="100%",
-                                        border="1px solid var(--accent-5)",
-                                    ),
-                                    width="100%",
-                                ),
-                            ),
-                            rx.cond(
-                                AppState.include_puntos
-                                & (AppState.puntos_content != ""),
-                                rx.box(
-                                    rx.heading(
-                                        "Puntos",
-                                        size="4",
-                                        mb="0.5em",
-                                        text_align="center",
-                                    ),
-                                    rx.box(
-                                        rx.markdown(AppState.puntos_content),
-                                        max_h="55vh",
-                                        overflow_y="auto",
-                                        bg="var(--gray-2)",
-                                        p="1.5em",
-                                        border_radius="large",
-                                        w="100%",
-                                        border="1px solid var(--gray-5)",
-                                    ),
-                                    width="100%",
-                                ),
-                            ),
-                            columns=rx.cond(
-                                (AppState.resumen_content != "")
-                                & AppState.include_puntos
-                                & (AppState.puntos_content != ""),
-                                "1fr 1fr",
-                                "1fr",
-                            ),
-                            spacing="5",
-                            width="100%",
-                            mt="1.5em",
-                            mb="1.5em",
+                                AppState.current_language == "es",
+                                "Generando resumen...",
+                                "Generating summary..."
+                            )
                         ),
-                        rx.hstack(  # Botones de acción
-                            rx.button(
-                                rx.icon("download", mr="0.2em"),
-                                "PDF",
-                                on_click=AppState.download_pdf,
-                                variant="soft",
-                                size="2",
-                                color_scheme=PRIMARY_COLOR_SCHEME,
-                                is_disabled=rx.cond(
-                                    AppState.resumen_content == "", True, False
-                                ),
-                            ),
-                            rx.button(
-                                rx.icon("git-branch", mr="0.2em"),
-                                "Mapa",
-                                on_click=AppState.generate_map,
-                                variant="soft",
-                                size="2",
-                                color_scheme=ACCENT_COLOR_SCHEME,
-                                is_disabled=rx.cond(
-                                    AppState.is_generating_mapa
-                                    | (AppState.selected_tema == ""),
-                                    True,
-                                    False,
-                                ),
-                            ),
-                            rx.button(
-                                rx.icon("clipboard-check", mr="0.2em"),
-                                "Evaluar",
-                                on_click=AppState.generate_evaluation,
-                                variant="soft",
-                                size="2",
-                                color_scheme="green",
-                                is_disabled=rx.cond(
-                                    AppState.is_generating_eval
-                                    | (AppState.resumen_content == ""),
-                                    True,
-                                    False,
-                                ),
-                            ),
-                            justify="center",
-                            spacing="4",
-                            mt="1em",
-                            width="100%",
-                        ),
-                        width="100%",
-                        align="center",
+                        rx.cond(
+                            AppState.current_language == "es",
+                            "Generar Resumen",
+                            "Generate Summary"
+                        )
+                    ),
+                    on_click=AppState.generate_summary,
+                    size="3",
+                    color_scheme=PRIMARY_COLOR_SCHEME,
+                    width="100%",
+                    margin_top="1em",
+                    is_disabled=rx.cond(
+                        AppState.is_generating_resumen | (AppState.selected_tema == ""),
+                        True,
+                        False,
                     ),
                 ),
-                spacing="4",
                 width="100%",
-                max_width="1000px",
-                p="2em",
-                align_items="center",
+                spacing="4",
+                padding="2em",
             ),
-            # Propiedades para centrar verticalmente, iniciando desde el primer tercio de la pantalla
-            direction="column",
-            align_items="center",
-            min_h="calc(100vh - 200px)",
-            justify_content="flex-start",
+            variant="surface",
             width="100%",
+            max_width="500px",
+        ),        # Espacio para mostrar el resumen generado
+        rx.cond(
+            (AppState.resumen_content != "") | (AppState.puntos_content != ""),
+            rx.card(
+                rx.vstack(
+                    rx.heading(
+                        rx.cond(
+                            AppState.current_language == "es",
+                            f"RESUMEN - {AppState.selected_tema.upper()}",
+                            f"SUMMARY - {AppState.selected_tema.upper()}"
+                        ),
+                        size="5", mb="1em", text_align="center", width="100%"
+                    ),
+                    rx.cond(
+                        AppState.resumen_content != "",
+                        rx.vstack(
+                            rx.box(
+                                rx.markdown(AppState.resumen_content),
+                                max_h="55vh",
+                                overflow_y="auto",
+                                bg="var(--accent-2)",
+                                p="1.5em",
+                                border_radius="large",
+                                w="100%",
+                                border="1px solid var(--accent-5)",
+                            ),
+                            width="100%",
+                            align_items="flex_start",
+                            spacing="2",
+                            margin_bottom="1.5em",
+                        ),
+                    ),
+                    rx.cond(
+                        AppState.include_puntos & (AppState.puntos_content != ""),
+                        rx.vstack(
+                            rx.heading(
+                                rx.cond(
+                                    AppState.current_language == "es",
+                                    "Puntos Clave",
+                                    "Key Points"
+                                ), 
+                                size="4", 
+                                mb="0.5em"
+                            ),
+                            rx.box(
+                                rx.markdown(AppState.puntos_content),
+                                max_h="55vh",
+                                overflow_y="auto",
+                                bg="var(--gray-2)",
+                                p="1.5em",
+                                border_radius="large",
+                                w="100%",
+                                border="1px solid var(--gray-5)",
+                            ),
+                            width="100%",
+                            align_items="flex_start",
+                            spacing="2",
+                        ),
+                    ),                    rx.hstack(                        rx.button(
+                            rx.icon("download", mr="0.2em"),
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Descargar PDF",
+                                "Download PDF"
+                            ),
+                            on_click=AppState.download_pdf,
+                            variant="soft",
+                            size="2",
+                            color_scheme="green",
+                        ),
+                        # Omitimos el botón "Crear Resumen" porque estamos en la pestaña de resumen
+                        rx.button(
+                            rx.icon("git-branch", mr="0.2em"),
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Crear Mapa",
+                                "Create Mind Map"
+                            ),
+                            on_click=lambda: AppState.set_active_tab("mapa"),
+                            variant="soft",
+                            size="2",
+                            color_scheme="amber",
+                        ),
+                        rx.button(
+                            rx.icon("book-open", mr="0.2em"),
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Crear Cuestionario",
+                                "Create Quiz"
+                            ),
+                            on_click=lambda: AppState.set_active_tab("cuestionario"),
+                            variant="soft",
+                            size="2",
+                            color_scheme="cyan",
+                        ),
+                        rx.button(
+                            rx.icon("clipboard-check", mr="0.2em"),
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Crear Evaluación",
+                                "Create Assessment"
+                            ),
+                            on_click=lambda: AppState.set_active_tab("evaluacion"),
+                            variant="soft",
+                            size="2",
+                            color_scheme="purple",                        ),
+                        justify="center",
+                        spacing="4",
+                        mt="1.5em",
+                        width="100%",
+                    ),
+                    width="100%",
+                    padding="2em",
+                    spacing="4",
+                ),
+                variant="surface",
+                width="100%",
+                max_width="800px",
+                margin_top="2em",
+            ),
         ),
         width="100%",
+        spacing="4",
+        align_items="center",
+        padding="1em",
+        margin_top="5em",
     )
-
 
 def mapa_tab():
-    """Contenido de la pestaña de mapa conceptual."""
-    return rx.center(  # Envolver en centro para alineación horizontal, igual que en resumen_tab
-        rx.flex(  # Usar flex para centrado vertical, igual que en resumen_tab
-            rx.vstack(
-                # Espacio adicional para separar del menú, igual que en resumen_tab
-                rx.spacer(height="60em"),
-                # Título centrado con un nombre más divertido y novedoso
+    """Contenido de la pestaña de mapas conceptuales."""
+    return rx.vstack(
+        # Encabezado con robot
+        rx.center(
+            rx.hstack(
                 rx.heading(
-                    "🧠 Explorando Conexiones Mentales",
-                    size="6",
-                    mb="2em",
-                    text_align="center",
+                    "🧠 " + rx.cond(
+                        AppState.current_language == "es",
+                        "Crea Mapas Conceptuales", 
+                        "Create Mind Maps"
+                    ), 
+                    size="6"
                 ),
-                # Mostrar error si existe
-                error_callout(AppState.error_message_ui),
-                # Contenedor de selección con ancho fijo, igual que en resumen_tab
-                rx.vstack(
-                    rx.box(
-                        rx.grid(
-                            rx.select(
-                                AppState.cursos_list,
-                                placeholder="Selecciona un Curso...",
-                                on_change=AppState.handle_curso_change,
-                                value=AppState.selected_curso,
-                                size="3",
-                                variant="soft",
-                                color_scheme=PRIMARY_COLOR_SCHEME,
-                                w="100%",
-                            ),
-                            rx.select(
-                                AppState.libros_para_curso,
-                                placeholder="Selecciona un Libro...",
-                                on_change=AppState.handle_libro_change,
-                                value=AppState.selected_libro,
-                                size="3",
-                                variant="soft",
-                                color_scheme=PRIMARY_COLOR_SCHEME,
-                                w="100%",
-                                is_disabled=rx.cond(
-                                    (AppState.selected_curso == "")
-                                    | (
-                                        AppState.selected_curso
-                                        == "Error al Cargar Cursos"
-                                    ),
-                                    True,
-                                    False,
-                                ),
-                            ),
-                            columns="1",
-                            spacing="4",
-                            w="100%",
-                        ),
-                        width="100%",
-                        max_width="400px",  # Mismo ancho máximo que en resumen_tab
+                rx.image(src="/robot_mapas.png", width="80px", height="80px", ml="3em"),
+                width="auto",
+                justify="center",
+                align_items="center",
+                mb="2em",
+            ),
+        ),
+        
+        rx.text(
+            rx.cond(
+                AppState.current_language == "es",
+                "Visualiza relaciones entre conceptos y fortalece tu comprensión con mapas conceptuales personalizados.",
+                "Visualize relationships between concepts and strengthen your understanding with personalized mind maps."
+            ),
+            color="gray.500",
+            mb="2em",
+            text_align="center",
+            max_width="600px",
+        ),
+        error_callout(AppState.error_message_ui),
+        rx.card(
+            rx.vstack(
+                rx.select(
+                    AppState.cursos_list,
+                    placeholder=rx.cond(
+                        AppState.current_language == "es",
+                        "Selecciona un Curso...",
+                        "Select a Course..."
                     ),
-                    rx.box(
-                        rx.text_area(
-                            placeholder="Tema central...",
-                            on_change=AppState.set_selected_tema,
-                            value=AppState.selected_tema,
-                            size="3",
-                            min_h="6em",
-                            w="100%",
-                        ),
-                        width="100%",
-                        max_width="400px",  # Mismo ancho máximo que en resumen_tab
-                    ),
-                    # Opciones para el mapa - agregamos el switch para orientación
-                    rx.box(
-                        rx.hstack(
-                            rx.hstack(
-                                rx.switch(
-                                    is_checked=AppState.mapa_orientacion_horizontal,
-                                    on_change=AppState.set_mapa_orientacion,
-                                    size="2",
-                                    color_scheme=ACCENT_COLOR_SCHEME,
-                                ),
-                                rx.text("Orientación Vertical", size="2", ml="0.5em"),
-                                spacing="2",
-                                align_items="center",
-                            ),
-                            rx.spacer(),
-                            width="100%",
-                            align_items="center",
-                        ),
-                        width="100%",
-                        max_width="400px",
-                    ),
-                    rx.box(
-                        rx.button(
-                            rx.cond(
-                                AppState.is_generating_mapa,
-                                rx.hstack(rx.spinner(size="2"), "Generando..."),
-                                "Generar Mapa",
-                            ),
-                            on_click=AppState.generate_map,
-                            size="3",
-                            color_scheme=PRIMARY_COLOR_SCHEME,
-                            is_disabled=rx.cond(
-                                AppState.is_generating_mapa
-                                | (AppState.selected_tema == ""),
-                                True,
-                                False,
-                            ),
-                            width="100%",
-                        ),
-                        width="100%",
-                        max_width="400px",  # Mismo ancho máximo que en resumen_tab
-                        mt="1em",
-                    ),
+                    value=AppState.selected_curso,
+                    on_change=AppState.handle_curso_change,
+                    size="3",
+                    color_scheme=PRIMARY_COLOR_SCHEME,
                     width="100%",
-                    align_items="center",
-                    spacing="4",
                 ),
-                # Resultados
-                rx.cond(
-                    AppState.mapa_image_url != "",
-                    rx.vstack(
-                        rx.box(
-                            rx.html(
-                                f'<iframe src="{AppState.mapa_image_url}" width="100%" height="600px" style="border:1px solid var(--gray-5); border-radius:8px; background:white;"></iframe>'
-                            ),
-                            width="100%",
-                            min_h="620px",
-                            border="1px solid var(--gray-4)",
-                            border_radius="large",
-                            box_shadow="sm",
-                            p="0.5em",
+                rx.select(
+                    AppState.libros_para_curso,
+                    placeholder=rx.cond(
+                        AppState.current_language == "es",
+                        "Selecciona un Libro...",
+                        "Select a Book..."
+                    ),
+                    value=AppState.selected_libro,
+                    on_change=AppState.handle_libro_change,
+                    size="3",
+                    color_scheme=PRIMARY_COLOR_SCHEME,
+                    width="100%",
+                    is_disabled=rx.cond(
+                        (AppState.selected_curso == "") | (AppState.selected_curso == "Error al Cargar Cursos"),
+                        True,
+                        False,
+                    ),
+                ),
+                rx.text_area(
+                    placeholder=rx.cond(
+                        AppState.current_language == "es",
+                        "Tema central del mapa...",
+                        "Central topic of the map..."
+                    ),
+                    value=AppState.selected_tema,
+                    on_change=AppState.set_selected_tema,
+                    size="3",
+                    min_height="100px",
+                    width="100%",
+                ),
+                rx.hstack(
+                    rx.hstack(
+                        rx.switch(
+                            is_checked=AppState.mapa_orientacion_horizontal,
+                            on_change=AppState.set_mapa_orientacion,
+                            size="2",
+                            color_scheme=ACCENT_COLOR_SCHEME,
                         ),
-                        # Agregar espacio adicional antes del botón
-                        rx.spacer(height="1.5em"),
-                        rx.hstack(
-                            rx.button(
-                                rx.icon("download", mr="0.2em"),
-                                "PDF",
-                                on_click=AppState.download_map_pdf,
-                                variant="soft",
-                                size="2",
-                                color_scheme=PRIMARY_COLOR_SCHEME,
-                                is_disabled=rx.cond(
-                                    AppState.mapa_image_url == "", True, False
-                                ),
-                            ),
-                            justify="center",
-                            spacing="4",
-                            width="100%",
+                        rx.text(
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Orientación Horizontal",
+                                "Horizontal Orientation"
+                            ), 
+                            size="2", 
+                            ml="0.5em"
                         ),
-                        width="100%",
                         spacing="2",
-                        align="center",
+                        align_items="center",
                     ),
-                ),
-                spacing="4",
-                width="100%",
-                max_width="1000px",
-                p="2em",
-                align_items="center",
-            ),
-            # Propiedades para centrar verticalmente, igual que en resumen_tab
-            direction="column",
-            align_items="center",
-            min_h="calc(100vh - 200px)",
-            justify_content="flex-start",
-            width="100%",
-        ),
-        width="100%",
-    )
-
-
-def evaluacion_tab():
-    """Contenido de la pestaña de evaluaciones."""
-    return rx.center(
-        rx.flex(
-            rx.vstack(
-                # Espacio adicional para separar del menú
-                rx.spacer(height="60em"),
-                # Título centrado con un nombre más divertido y novedoso
-                rx.heading(
-                    "📝 Desafía tu Conocimiento", size="6", mb="2em", text_align="center"
-                ),
-                # Mostrar error si existe
-                error_callout(AppState.error_message_ui),
-                # Contenedor de selección con ancho fijo
-                rx.vstack(
-                    rx.box(
-                        rx.grid(
-                            rx.select(
-                                AppState.cursos_list,
-                                placeholder="Selecciona un Curso...",
-                                on_change=AppState.handle_curso_change,
-                                value=AppState.selected_curso,
-                                size="3",
-                                variant="soft",
-                                color_scheme=PRIMARY_COLOR_SCHEME,
-                                w="100%",
-                            ),
-                            rx.select(
-                                AppState.libros_para_curso,
-                                placeholder="Selecciona un Libro...",
-                                on_change=AppState.handle_libro_change,
-                                value=AppState.selected_libro,
-                                size="3",
-                                variant="soft",
-                                color_scheme=PRIMARY_COLOR_SCHEME,
-                                w="100%",
-                                is_disabled=rx.cond(
-                                    (AppState.selected_curso == "")
-                                    | (
-                                        AppState.selected_curso
-                                        == "Error al Cargar Cursos"
-                                    ),
-                                    True,
-                                    False,
-                                ),
-                            ),
-                            columns="1",
-                            spacing="4",
-                            w="100%",
-                        ),
-                        width="100%",
-                        max_width="400px",
-                    ),
-                    rx.box(
-                        rx.text_area(
-                            placeholder="Tema a evaluar...",
-                            on_change=AppState.set_selected_tema,
-                            value=AppState.selected_tema,
-                            size="3",
-                            min_h="6em",
-                            w="100%",
-                        ),
-                        width="100%",
-                        max_width="400px",
-                    ),
-                    rx.box(
-                        rx.button(
-                            rx.cond(
-                                AppState.is_generating_eval,
-                                rx.hstack(rx.spinner(size="2"), "Generando..."),
-                                "Crear Evaluación",
-                            ),
-                            on_click=AppState.generate_evaluation,
-                            size="3",
-                            color_scheme=PRIMARY_COLOR_SCHEME,
-                            is_disabled=rx.cond(
-                                AppState.is_generating_eval
-                                | (AppState.selected_tema == ""),
-                                True,
-                                False,
-                            ),
-                            width="100%",
-                        ),
-                        width="100%",
-                        max_width="400px",
-                        mt="1em",
-                    ),
+                    rx.spacer(),
                     width="100%",
                     align_items="center",
+                    margin_top="0.5em",
+                ),
+                rx.button(
+                    rx.cond(
+                        AppState.is_generating_mapa,
+                        rx.hstack(rx.spinner(size="2"), 
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Generando mapa...",
+                                "Generating map..."
+                            )
+                        ),
+                        rx.cond(
+                            AppState.current_language == "es",
+                            "Generar Mapa",
+                            "Generate Map"
+                        )
+                    ),
+                    on_click=AppState.generate_map,
+                    size="3",
+                    color_scheme=ACCENT_COLOR_SCHEME,
+                    width="100%",
+                    margin_top="1em",
+                    is_disabled=rx.cond(
+                        AppState.is_generating_mapa | (AppState.selected_tema == ""),
+                        True,
+                        False,
+                    ),
+                ),
+                width="100%",
+                spacing="4",
+                padding="2em",
+            ),
+            variant="surface",
+            width="100%",
+            max_width="500px",
+        ),
+        # Espacio para mostrar el mapa generado
+        rx.cond(
+            AppState.mapa_image_url != "",
+            rx.card(
+                rx.vstack(
+                    rx.heading(
+                        rx.cond(
+                            AppState.current_language == "es",
+                            f"MAPA CONCEPTUAL - {AppState.selected_tema.upper()}",
+                            f"MIND MAP - {AppState.selected_tema.upper()}"
+                        ), 
+                        size="5", 
+                        mb="1em", 
+                        text_align="center",
+                        width="100%"
+                    ),
+                    rx.box(
+                        rx.html(
+                            f'<iframe src="{AppState.mapa_image_url}" width="100%" height="600px" style="border:1px solid var(--gray-5); border-radius:8px; background:white;"></iframe>'
+                        ),
+                        width="100%",
+                        min_h="620px",
+                        border="1px solid var(--gray-4)",
+                        border_radius="large",
+                        box_shadow="sm",
+                        p="0.5em",
+                    ),                    rx.hstack(                        rx.button(
+                            rx.icon("download", mr="0.2em"),
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Descargar PDF",
+                                "Download PDF"
+                            ),
+                            on_click=AppState.download_pdf,  # Cambiado de download_map_pdf a download_pdf
+                            variant="soft",
+                            size="2",
+                            color_scheme="green",
+                        ),
+                        rx.button(
+                            rx.icon("file-text", mr="0.2em"),
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Crear Resumen",
+                                "Create Summary"
+                            ),
+                            on_click=lambda: AppState.set_active_tab("resumen"),
+                            variant="soft",
+                            size="2",
+                            color_scheme="blue",
+                        ),
+                        # Omitimos el botón "Crear Mapa" porque estamos en la pestaña de mapa
+                        rx.button(
+                            rx.icon("book-open", mr="0.2em"),
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Crear Cuestionario",
+                                "Create Quiz"
+                            ),
+                            on_click=lambda: AppState.set_active_tab("cuestionario"),
+                            variant="soft",
+                            size="2",
+                            color_scheme="cyan",
+                        ),
+                        rx.button(
+                            rx.icon("clipboard-check", mr="0.2em"),
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Crear Evaluación",
+                                "Create Assessment"
+                            ),
+                            on_click=lambda: AppState.set_active_tab("evaluacion"),
+                            variant="soft",
+                            size="2",
+                            color_scheme="purple",                        ),
+                        justify="center",
+                        spacing="4",
+                        mt="1.5em",
+                        width="100%",
+                    ),
+                    width="100%",
+                    padding="2em",
                     spacing="4",
                 ),
-                spacing="4",
+                variant="surface",
                 width="100%",
-                max_width="1000px",
-                p="2em",
-                align_items="center",
+                max_width="900px",
+                margin_top="2em",
             ),
-            direction="column",
-            align_items="center",
-            min_h="calc(100vh - 200px)",
-            justify_content="flex-start",
-            width="100%",
         ),
         width="100%",
+        spacing="4",
+        align_items="center",
+        padding="1em",
+        margin_top="5em",
     )
-
 
 def perfil_tab():
-    """Contenido de la pestaña de perfil y estadísticas."""
+    """Contenido de la pestaña de perfil y progreso."""
     return rx.vstack(
-        rx.heading("Perfil y Progreso", size="6", mb="1.5em", text_align="center"),
-        rx.grid(
-            # ... existing code ...
+        # Diálogo de confirmación (modal)
+        rx.cond(
+            AppState.mostrar_dialogo_confirmacion,
+            rx.dialog.root(
+                rx.dialog.content(
+                    rx.dialog.title(
+                        rx.cond(
+                            AppState.current_language == "es",
+                            "Confirmar acción",
+                            "Confirm action"
+                        ),
+                        color="var(--gray-12)"
+                    ),
+                    rx.dialog.description(AppState.mensaje_confirmacion, color="var(--gray-11)"),
+                    rx.flex(
+                        rx.button(
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Cancelar",
+                                "Cancel"
+                            ),
+                            variant="soft",
+                            color_scheme="gray",
+                            on_click=AppState.cancelar_accion,
+                            size="2",
+                        ),
+                        rx.button(
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Confirmar",
+                                "Confirm"
+                            ),
+                            variant="solid",
+                            color_scheme="red",
+                            on_click=AppState.confirmar_accion,
+                            size="2",
+                        ),
+                        justify="end",
+                        gap="3",
+                        margin_top="4",
+                    ),
+                    width="400px",
+                ),
+                open=AppState.mostrar_dialogo_confirmacion,
+            ),
         ),
+        # Encabezado principal con robot
+        rx.center(
+            rx.hstack(
+                rx.heading(
+                    rx.cond(
+                        AppState.current_language == "es",
+                        "👤 Perfil Personal", 
+                        "👤 Personal Profile"
+                    ),
+                    size="6", 
+                    color="var(--gray-12)"
+                ),
+                rx.image(src="/robot_perfil.png", width="80px", height="80px", ml="3em"),
+                width="auto",
+                justify="center",
+                align_items="center",
+                mb="2em",
+            ),
+        ),
+        
+        rx.text(
+            rx.cond(
+                AppState.current_language == "es",
+                "Aquí puedes ver tu progreso y gestionar tu cuenta.",
+                "Here you can view your progress and manage your account."
+            ),
+            color="var(--gray-9)",
+            mb="2em",
+            text_align="center",
+            max_width="600px",
+        ),
+        
+        # Tarjeta de perfil con ancho controlado - AUMENTADO max_width de 500px a 700px
         rx.card(
-            # ... existing code ...
+            rx.vstack(
+                rx.hstack(
+                    # Avatar/Imagen del perfil
+                    rx.avatar(
+                        fallback="F",
+                        src="/assets/favicon.ico",
+                        size="9",
+                        border="2px solid var(--accent-6)",
+                        margin_right="1em",
+                    ),
+                    
+                    # Información del perfil
+                    rx.vstack(
+                        # Lista de información del usuario en formato horizontal
+                        rx.vstack(
+                            # Nombre
+                            rx.hstack(
+                                rx.text(
+                                    rx.cond(
+                                        AppState.current_language == "es",
+                                        "Nombre:",
+                                        "Name:"
+                                    ), 
+                                    font_weight="bold", 
+                                    width="150px", 
+                                    color_scheme="gray"
+                                ),
+                                rx.text("felipe", color="var(--gray-12)"),  # gray-12 es un color oscuro que se adapta al tema
+                                width="100%",
+                                justify="start",
+                            ),
+                            # Nivel
+                            rx.hstack(
+                                rx.text(
+                                    rx.cond(
+                                        AppState.current_language == "es",
+                                        "Nivel:",
+                                        "Level:"
+                                    ), 
+                                    font_weight="bold", 
+                                    width="150px", 
+                                    color_scheme="gray"
+                                ),
+                                rx.text(
+                                    rx.cond(
+                                        AppState.current_language == "es",
+                                        "Estudiante Avanzado",
+                                        "Advanced Student"
+                                    ),
+                                    color="var(--gray-12)"
+                                ),
+                                width="100%",
+                                justify="start",
+                            ),
+                            # Curso Activo
+                            rx.hstack(
+                                rx.text(
+                                    rx.cond(
+                                        AppState.current_language == "es",
+                                        "Curso Activo:",
+                                        "Active Course:"
+                                    ), 
+                                    font_weight="bold", 
+                                    width="150px", 
+                                    color_scheme="gray"
+                                ),
+                                rx.text("8vo Básico", color="var(--gray-12)"),
+                                width="100%",
+                                justify="start",
+                            ),
+                            
+                            # Asignaturas
+                            rx.hstack(
+                                rx.text(
+                                    rx.cond(
+                                        AppState.current_language == "es",
+                                        "Asignaturas:",
+                                        "Subjects:"
+                                    ), 
+                                    font_weight="bold", 
+                                    width="150px", 
+                                    color_scheme="gray"
+                                ),
+                                rx.hstack(
+                                    rx.badge("MAT", color_scheme="blue"),
+                                    rx.badge("CIEN", color_scheme="green"),
+                                    rx.badge("HIS", color_scheme="amber"),
+                                    rx.badge("LEN", color_scheme="purple"),
+                                    spacing="2",
+                                    wrap="nowrap",
+                                    overflow_x="auto",
+                                ),
+                                width="100%",
+                                justify="start",
+                                align_items="center",
+                            ),                            # Evaluaciones Completadas
+                            rx.hstack(
+                                rx.text(
+                                    rx.cond(
+                                        AppState.current_language == "es",
+                                        "Evaluaciones Completadas:",
+                                        "Completed Assessments:"
+                                    ), 
+                                    font_weight="bold", 
+                                    width="150px", 
+                                    color_scheme="gray"
+                                ),
+                                rx.text(AppState.stats_history.length(), color="var(--gray-12)"),
+                                width="100%",
+                                justify="start",
+                            ),
+                            
+                            spacing="2",
+                            width="100%",
+                        ),
+                        width="100%",
+                        align_items="flex_start",
+                    ),
+                    spacing="4", 
+                    width="100%",
+                    align_items="flex-start",                ),
+                
+                # Botones de acción
+                rx.hstack(
+                    rx.button(
+                        rx.icon("user-cog", mr="0.2em"),
+                        rx.cond(
+                            AppState.current_language == "es",
+                            "Cambiar Contraseña",
+                            "Change Password"
+                        ),
+                        variant="soft",
+                        size="2",
+                        color_scheme=PRIMARY_COLOR_SCHEME,
+                    ),                    rx.button(
+                        rx.icon("download", mr="0.2em"),
+                        rx.cond(
+                            AppState.current_language == "es",
+                            "Descargar Historial",
+                            "Download History"
+                        ),
+                        variant="soft",
+                        size="2",
+                        color_scheme=ACCENT_COLOR_SCHEME,
+                        on_click=AppState.descargar_historial,
+                    ),
+                    rx.button(
+                        rx.icon("trash", mr="0.2em"),
+                        rx.cond(
+                            AppState.current_language == "es",
+                            "Borrar Historial",
+                            "Delete History"
+                        ),
+                        variant="soft",
+                        size="2",
+                        color_scheme="red",
+                        on_click=AppState.mostrar_confirmacion_eliminar_historial,
+                    ),
+                    justify="center",
+                    spacing="4",
+                    mt="1.5em",
+                    width="100%",
+                ),
+                
+                width="100%",
+                spacing="4",
+                padding="2em",
+            ),
+            variant="surface",
+            width="100%",
+            max_width="1000px",
         ),
-        w="100%",
-        max_width="1000px",
-        margin="0 auto",
-        p="2em",
-        spacing="5",
+        
+        # Tarjeta de estadísticas con estilo horizontal y colores distintos
+        rx.card(
+            rx.vstack(
+                rx.center(
+                    rx.hstack(
+                        rx.icon("bar-chart", color="#4F46E5"),
+                        rx.heading(
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "📊 Estadísticas de Aprendizaje", 
+                                "📊 Learning Statistics"
+                            ), 
+                            size="5", 
+                            color="var(--gray-12)"
+                        ),
+                        spacing="2",
+                    ),
+                    width="100%"
+                ),
+                
+                # MODIFICADO: Progreso por materia - Barras de progreso alineadas
+                rx.vstack(
+                    rx.center(
+                        rx.heading(
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "Progreso por Materia", 
+                                "Progress by Subject"
+                            ), 
+                            size="4", 
+                            mb="1em", 
+                            color="var(--gray-12)"
+                        ),
+                        width="100%",
+                    ),
+                    
+                    # Contenedor para las barras de progreso
+                    rx.vstack(
+                        # Matemáticas - Con ancho fijo para el texto
+                        rx.hstack(
+                            rx.box(
+                                rx.text(
+                                    rx.cond(
+                                        AppState.current_language == "es",
+                                        "Matemáticas", 
+                                        "Mathematics"
+                                    ), 
+                                    align_self="center", 
+                                    color="var(--gray-12)"
+                                ),
+                                width="150px", 
+                                min_width="150px",
+                            ),
+                            rx.box(
+                                rx.progress(
+                                    value=AppState.matematicas_progress, # Valor dinámico basado en historial
+                                    width="100%",
+                                    height="20px",
+                                    color_scheme="blue",
+                                ),
+                                width="100%",
+                            ),
+                            rx.text(f"{AppState.matematicas_progress}%", min_width="50px", text_align="right", color="var(--gray-12)"),
+                            width="100%",
+                            align_items="center",
+                            spacing="3",
+                        ),
+                        
+                        # Ciencias - Con ancho fijo para el texto
+                        rx.hstack(
+                            rx.box(
+                                rx.text(
+                                    rx.cond(
+                                        AppState.current_language == "es",
+                                        "Ciencias",
+                                        "Sciences"
+                                    ), 
+                                    align_self="center", 
+                                    color="var(--gray-12)"
+                                ),
+                                width="150px", 
+                                min_width="150px",
+                            ),
+                            rx.box(
+                                rx.progress(
+                                    value=AppState.ciencias_progress, # Valor dinámico basado en historial
+                                    width="100%",
+                                    height="20px",
+                                    color_scheme="green",
+                                ),
+                                width="100%",
+                            ),
+                            rx.text(f"{AppState.ciencias_progress}%", min_width="50px", text_align="right", color="var(--gray-12)"),
+                            width="100%",
+                            align_items="center",
+                            spacing="3",
+                        ),
+                        
+                        # Historia - Con ancho fijo para el texto
+                        rx.hstack(
+                            rx.box(
+                                rx.text(
+                                    rx.cond(
+                                        AppState.current_language == "es",
+                                        "Historia",
+                                        "History"
+                                    ), 
+                                    align_self="center", 
+                                    color="var(--gray-12)"
+                                ),
+                                width="150px", 
+                                min_width="150px",
+                            ),
+                            rx.box(
+                                rx.progress(
+                                    value=AppState.historia_progress, # Valor dinámico basado en historial
+                                    width="100%",
+                                    height="20px",
+                                    color_scheme="amber",
+                                ),
+                                width="100%",
+                            ),
+                            rx.text(f"{AppState.historia_progress}%", min_width="50px", text_align="right", color="var(--gray-12)"),
+                            width="100%",
+                            align_items="center",
+                            spacing="3",
+                        ),
+                        
+                        # Lenguaje - Con ancho fijo para el texto
+                        rx.hstack(
+                            rx.box(
+                                rx.text(
+                                    rx.cond(
+                                        AppState.current_language == "es",
+                                        "Lenguaje",
+                                        "Language"
+                                    ), 
+                                    align_self="center", 
+                                    color="var(--gray-12)"
+                                ),
+                                width="150px", 
+                                min_width="150px",
+                            ),
+                            rx.box(
+                                rx.progress(
+                                    value=AppState.lenguaje_progress, # Valor dinámico basado en historial
+                                    width="100%",
+                                    height="20px",
+                                    color_scheme="purple",
+                                ),
+                                width="100%",
+                            ),
+                            rx.text(f"{AppState.lenguaje_progress}%", min_width="50px", text_align="right", color="var(--gray-12)"),
+                            width="100%",
+                            align_items="center",
+                            spacing="3",
+                        ),
+                        
+                        spacing="3",
+                        width="100%",
+                    ),
+                    
+                    width="100%",
+                    padding_top="0.5em",
+                    padding_bottom="1em",
+                ),
+                
+                rx.divider(margin_y="1em"),
+                
+                # Estadísticas en diseño horizontal con colores diferentes
+                rx.hstack(                    # Evaluaciones completadas - Azul
+                    rx.box(
+                        rx.vstack(
+                            rx.heading(AppState.stats_history.length(), size="3", color="white", font_size="2em", mb="0"),
+                            rx.text(
+                                rx.cond(
+                                    AppState.current_language == "es",
+                                    "Evaluaciones",
+                                    "Assessments"
+                                ), 
+                                font_size="sm", 
+                                color="white", 
+                                text_align="center"
+                            ),
+                            rx.text(
+                                rx.cond(
+                                    AppState.current_language == "es",
+                                    "Completadas",
+                                    "Completed"
+                                ), 
+                                font_size="sm", 
+                                color="white", 
+                                text_align="center"
+                            ),
+                            align_items="center",
+                            justify_content="center",
+                            width="100%",
+                            height="100%",
+                        ),
+                        background="linear-gradient(135deg, #4299E1, #3182CE)",
+                        border_radius="lg",
+                        padding="1em",
+                        width="100%",
+                        height="140px",
+                        box_shadow="md",
+                    ),                      # Promedio de puntuación - Verde
+                    rx.box(
+                        rx.vstack(
+                            rx.heading(f"{AppState.promedio_calificaciones}%", size="3", color="white", font_size="2em", mb="0"),
+                            rx.text(
+                                rx.cond(
+                                    AppState.current_language == "es",
+                                    "Promedio",
+                                    "Average"
+                                ), 
+                                font_size="sm", 
+                                color="white", 
+                                text_align="center"
+                            ),
+                            rx.text(
+                                rx.cond(
+                                    AppState.current_language == "es",
+                                    "Puntuación",
+                                    "Score"
+                                ), 
+                                font_size="sm", 
+                                color="white", 
+                                text_align="center"
+                            ),
+                            align_items="center",
+                            justify_content="center",
+                            width="100%",
+                            height="100%",
+                        ),
+                        background="linear-gradient(135deg, #48BB78, #38A169)",
+                        border_radius="lg",
+                        padding="1em",
+                        width="100%",
+                        height="140px",
+                        box_shadow="md",
+                    ),
+                      # Mapas creados - Amber
+                    rx.box(
+                        rx.vstack(
+                            rx.heading(AppState.contar_mapas_creados, size="3", color="white", font_size="2em", mb="0"),
+                            rx.text(
+                                rx.cond(
+                                    AppState.current_language == "es",
+                                    "Mapas",
+                                    "Maps"
+                                ), 
+                                font_size="sm", 
+                                color="white", 
+                                text_align="center"
+                            ),
+                            rx.text(
+                                rx.cond(
+                                    AppState.current_language == "es",
+                                    "Creados",
+                                    "Created"
+                                ), 
+                                font_size="sm", 
+                                color="white", 
+                                text_align="center"
+                            ),
+                            align_items="center",
+                            justify_content="center",
+                            width="100%",
+                            height="100%",
+                        ),
+                        background="linear-gradient(135deg, #F6AD55, #ED8936)",
+                        border_radius="lg",
+                        padding="1em",
+                        width="100%",
+                        height="140px",
+                        box_shadow="md",
+                    ),
+                      # Resúmenes generados - Púrpura
+                    rx.box(
+                        rx.vstack(
+                            rx.heading(AppState.contar_resumenes_generados, size="3", color="white", font_size="2em", mb="0"),
+                            rx.text(
+                                rx.cond(
+                                    AppState.current_language == "es",
+                                    "Resúmenes",
+                                    "Summaries"
+                                ), 
+                                font_size="sm", 
+                                color="white", 
+                                text_align="center"
+                            ),
+                            rx.text(
+                                rx.cond(
+                                    AppState.current_language == "es",
+                                    "Generados",
+                                    "Generated"
+                                ), 
+                                font_size="sm", 
+                                color="white", 
+                                text_align="center"
+                            ),
+                            align_items="center",
+                            justify_content="center",
+                            width="100%",
+                            height="100%",
+                        ),
+                        background="linear-gradient(135deg, #9F7AEA, #805AD5)",
+                        border_radius="lg",
+                        padding="1em",
+                        width="100%",
+                        height="140px",
+                        box_shadow="md",
+                    ),
+                    
+                    width="100%",
+                    spacing="4",
+                    align_items="stretch",
+                ),
+                
+                width="100%",
+                spacing="4",
+                padding="2em",
+            ),
+            variant="surface",
+            width="100%",
+            max_width="1000px",
+            margin_top="2em",
+        ),
+        
+        # Nueva tarjeta para el historial de evaluaciones
+        rx.card(
+            rx.vstack(
+                rx.center(
+                    rx.vstack(
+                        rx.heading(
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "📚 Historial de Evaluaciones",
+                                "📚 Assessment History"
+                            ),
+                            size="4", 
+                            mb="1em", 
+                            color="var(--gray-12)"
+                        ),
+                        rx.text(
+                            rx.cond(
+                                AppState.current_language == "es",
+                                "¡Mira tu progreso! Cada evaluación te hace más fuerte 💪",
+                                "Check your progress! Each assessment makes you stronger 💪"
+                            ),
+                            color="var(--gray-9)",
+                            mb="2em",
+                            text_align="center",
+                        ),
+                        width="100%"
+                    ),
+                    width="100%",
+                ),
+                # Contenedor con scroll horizontal si es necesario
+                rx.box(
+                    rx.vstack(
+                        # Encabezado de la tabla
+                        rx.hstack(
+                            rx.text(
+                                rx.cond(
+                                    AppState.current_language == "es",
+                                    "📅 Fecha",
+                                    "📅 Date"
+                                ), 
+                                font_weight="bold", 
+                                width="20%", 
+                                text_align="center", 
+                                white_space="nowrap", 
+                                color="var(--gray-12)"
+                            ),
+                            rx.text(
+                                rx.cond(
+                                    AppState.current_language == "es",
+                                    "📖 Libro",
+                                    "📖 Book"
+                                ), 
+                                font_weight="bold", 
+                                width="25%", 
+                                text_align="center", 
+                                white_space="nowrap", 
+                                color="var(--gray-12)"
+                            ),
+                            rx.text(
+                                rx.cond(
+                                    AppState.current_language == "es",
+                                    "📝 Tema",
+                                    "📝 Topic"
+                                ), 
+                                font_weight="bold", 
+                                width="25%", 
+                                text_align="center", 
+                                white_space="nowrap", 
+                                color="var(--gray-12)"
+                            ),
+                            rx.box(
+                                rx.text(
+                                    rx.cond(
+                                        AppState.current_language == "es",
+                                        "📝 Nota",
+                                        "📝 Score"
+                                    ),
+                                    font_weight="bold", 
+                                    white_space="nowrap", 
+                                    color="var(--gray-12)"
+                                ),
+                                width="15%",
+                                display="flex",
+                                justify_content="center",
+                                padding_right="1em",
+                            ),
+                            rx.box(
+                                rx.text(
+                                    rx.cond(
+                                        AppState.current_language == "es",
+                                        "🏅 Pts",
+                                        "🏅 Pts"
+                                    ), 
+                                    font_weight="bold", 
+                                    white_space="nowrap", 
+                                    color="var(--gray-12)"
+                                ),
+                                width="10%",
+                                display="flex",
+                                justify_content="center",
+                                padding_right="1em",
+                            ),
+                            rx.text("", width="5%", color="var(--gray-12)"),
+                            width="100%",
+                            padding="1em",
+                            border_bottom="1px solid var(--gray-4)",
+                        ),                        # Lista de evaluaciones (paginado)
+                        rx.foreach(
+                            AppState.historial_evaluaciones_paginado,
+                            lambda evaluacion, i: rx.hstack(
+                                rx.text(evaluacion.get("fecha", ""), width="20%", text_align="center", white_space="nowrap", color="var(--gray-12)"),
+                                rx.text(evaluacion.get("libro", ""), width="25%", text_align="center", white_space="nowrap", color="var(--gray-12)"),
+                                rx.text(evaluacion.get("tema", ""), width="25%", text_align="center", white_space="nowrap", color="var(--gray-12)"),                                rx.box(
+                                    rx.hstack(
+                                        rx.text(f"{evaluacion.get('calificacion', 0)}%", color="var(--gray-12)"),
+                                        rx.icon("star", color="var(--yellow-9)"),
+                                        spacing="2",
+                                    ),
+                                    width="15%",
+                                    display="flex",
+                                    justify_content="center",
+                                    padding_right="1em",
+                                ),
+                                rx.box(
+                                    rx.text(
+                                        f"{evaluacion.get('respuestas_correctas', 0)}/{evaluacion.get('total_preguntas', 0)}",
+                                        color="var(--green-10)",
+                                    ),
+                                    width="10%",
+                                    display="flex",
+                                    justify_content="center",
+                                    padding_right="1em",
+                                ),rx.box(
+                                    rx.button(
+                                        rx.cond(
+                                            AppState.current_language == "es",
+                                            "Repasar",
+                                            "Review"
+                                        ),
+                                        color_scheme="blue",
+                                        size="2",
+                                        on_click=lambda curso=evaluacion.get("curso", ""), libro=evaluacion.get("libro", ""), tema=evaluacion.get("tema", ""): AppState.repasar_evaluacion_y_ir(curso, libro, tema),
+                                    ),
+                                    width="5%", display="flex", justify_content="center", margin_right="1em"
+                                ),                                width="100%",
+                                padding="1em",
+                                border_bottom="1px solid var(--gray-3)",
+                                margin_bottom="0.8em",  # Aumentado espacio entre registros
+                                align_items="center",
+                                background=rx.cond(i % 2 == 0, "var(--gray-1)", "var(--gray-2)"),  # Alternar colores adaptados al tema
+                                border_radius="md",  # Bordes redondeados
+                                transition="all 0.2s ease",  # Transición suave
+                                _hover={"background": "var(--accent-1)"},  # Efecto hover
+                            ),
+                        ),                        # Contenedor de paginación centrado
+                        rx.box(
+                            rx.hstack(
+                                rx.button(
+                                    rx.hstack(
+                                        rx.icon("arrow-left", size=14), 
+                                        rx.text(
+                                            rx.cond(
+                                                AppState.current_language == "es",
+                                                "Anterior",
+                                                "Previous"
+                                            )
+                                        )
+                                    ),
+                                    on_click=AppState.pagina_anterior, 
+                                    is_disabled=~AppState.tiene_pagina_anterior,
+                                    variant="soft",
+                                    color_scheme=PRIMARY_COLOR_SCHEME,
+                                    size="2",
+                                ),                                rx.text(
+                                    rx.cond(
+                                        AppState.total_paginas_historial > 1,
+                                        rx.cond(
+                                            AppState.current_language == "es",
+                                            f"Página {AppState.historial_evaluaciones_pagina_actual}/{AppState.total_paginas_historial}",
+                                            f"Page {AppState.historial_evaluaciones_pagina_actual}/{AppState.total_paginas_historial}"
+                                        ),
+                                        rx.cond(
+                                            AppState.current_language == "es",
+                                            f"Página {AppState.historial_evaluaciones_pagina_actual}",
+                                            f"Page {AppState.historial_evaluaciones_pagina_actual}"
+                                        )
+                                    ),
+                                    font_weight="medium",
+                                    padding="0 1em",
+                                    color="var(--gray-12)",  # Color del texto adaptado al tema
+                                ),
+                                rx.button(
+                                    rx.hstack(
+                                        rx.text(
+                                            rx.cond(
+                                                AppState.current_language == "es",
+                                                "Siguiente",
+                                                "Next"
+                                            )
+                                        ), 
+                                        rx.icon("arrow-right", size=14)
+                                    ),
+                                    on_click=AppState.pagina_siguiente, 
+                                    is_disabled=~AppState.tiene_siguiente_pagina,
+                                    variant="soft",
+                                    color_scheme=PRIMARY_COLOR_SCHEME,
+                                    size="2",
+                                ),
+                                justify="center", 
+                                spacing="4", 
+                                mt="1.5em",
+                                mb="0.5em",
+                            ),
+                            width="100%",
+                            display="flex",
+                            justify_content="center",  # Centra horizontalmente el contenido
+                            padding="0.5em 0 1em 0",  # Añade padding vertical
+                        ),
+                        width="100%",
+                        spacing="0",
+                        border="1px solid var(--gray-4)",
+                        border_radius="lg",
+                    ),
+                    width="100%",
+                    overflow_x="auto",
+                ),
+            ),
+            variant="surface",
+            width="100%",
+            max_width="1000px",
+            margin_top="2em",
+        ),
+        
+        # Estilo general igual que en mapas
+        width="100%",
+        spacing="4",
+        align_items="center",
+        padding="1em",
+        margin_top="5em",
     )
-
 
 def ayuda_tab():
-    """Contenido de la pestaña de ayuda."""
-    # Definir contenido aquí para evitar que sea muy largo
-    content = {"empezar": "### Cómo empezar\n1...", "faq": "### FAQ\n**Q:** ...?"}
+    """Contenido de la pestaña de ayuda con diseño moderno y centrado, similar a la pestaña de evaluaciones."""
     return rx.vstack(
-        rx.heading("Ayuda", size="6", mb="1em", text_align="center"),
-        rx.tabs.root(
-            rx.tabs.list(
-                rx.tabs.trigger("Empezar", value="empezar"),
-                rx.tabs.trigger("FAQ", value="faq"),
-                size="2",
-                w="100%",
+        # Encabezado principal centrado con robot
+        rx.center(
+            rx.hstack(
+                rx.heading(AppState.help_center_text, size="6"),
+                rx.image(src="/robot_ayuda.png", width="80px", height="80px", ml="3em"),
+                width="auto",
                 justify="center",
-                border_bottom="1px solid var(--gray-6)",
+                align_items="center",
+                mb="2em",
             ),
-            rx.tabs.content(
-                rx.box(
-                    rx.markdown(content["empezar"]),
-                    p="1.5em",
-                    border="1px solid var(--gray-4)",
-                    border_radius="medium",
-                    mt="1em",
-                    bg="var(--gray-1)",
-                ),
-                value="empezar",
-            ),
-            rx.tabs.content(
-                rx.box(
-                    rx.markdown(content["faq"]),
-                    p="1.5em",
-                    border="1px solid var(--gray-4)",
-                    border_radius="medium",
-                    mt="1em",
-                    bg="var(--gray-1)",
-                ),
-                value="faq",
-            ),
-            w="100%",
-            default_value="empezar",
         ),
-        w="100%",
-        max_w="900px",
-        m="0 auto",
-        p="2em",
+        
+        # Texto introductorio centrado
+        rx.text(
+            AppState.help_subtitle_text,
+            color="gray.500",
+            mb="2em",
+            text_align="center",
+            max_width="600px",
+        ),
+        
+        # Tarjeta principal que contiene las preguntas frecuentes
+        rx.card(
+            rx.vstack(
+                # Título de la sección
+                rx.hstack(
+                    rx.icon("lightbulb", size=16, color="var(--orange-9)"),
+                    rx.heading(AppState.frequent_questions_text, size="5", mb="1em"),
+                    spacing="2",
+                    width="100%",
+                    justify="center",
+                    align_items="center",
+                    padding_y="0.5em",
+                ),
+                
+                rx.divider(),
+                
+                # Lista de preguntas con funcionalidad para mostrar/ocultar respuestas
+                rx.foreach(
+                    AppState.ayuda_preguntas_respuestas,
+                    lambda pregunta, i: rx.vstack(
+                        # Pregunta clickeable para mostrar/ocultar respuesta
+                        rx.box(
+                            rx.hstack(
+                                rx.icon("question-mark", size=16, color="var(--gray-12)"),
+                                rx.text(pregunta["pregunta"], font_weight="medium"),
+                                rx.spacer(),
+                                rx.icon(
+                                    rx.cond(
+                                        AppState.ayuda_pregunta_abierta == i,
+                                        "chevron-down",
+                                        "chevron-right"
+                                    ), 
+                                    size=16, 
+                                    color="var(--gray-11)"
+                                ),
+                                width="100%",
+                                align_items="center",
+                            ),
+                            padding="0.8em 1em",
+                            border_radius="md",
+                            _hover={"bg": "rgba(255, 123, 66, 0.1)", "cursor": "pointer"},
+                            width="100%",
+                            on_click=lambda index=i: AppState.toggle_pregunta(index),
+                        ),
+                        
+                        # Respuesta que se muestra/oculta
+                        rx.cond(
+                            AppState.ayuda_pregunta_abierta == i,
+                            rx.box(
+                                rx.text(
+                                    pregunta["respuesta"],
+                                    color="var(--gray-12)",
+                                ),
+                                padding="0 1em 1em 2.5em",
+                                border_left="2px solid var(--accent-6)",
+                                margin_left="0.5em",
+                                background="var(--gray-1)",
+                                transition="all 0.3s ease-in-out",
+                                animation="fadeIn 0.4s ease-in-out",
+                            ),
+                        ),
+                        width="100%",
+                        align_items="flex_start",
+                        spacing="0",
+                        margin_bottom="0.5em",
+                    ),
+                ),
+                
+                # Separador antes del formulario de contacto
+                rx.divider(margin_y="1.5em"),
+                
+                # Sección para contacto adicional
+                rx.vstack(
+                    rx.heading(AppState.not_found_help_text, size="5", mb="1em", text_align="center"),
+                    rx.button(
+                        rx.hstack(
+                            rx.icon("mail", size=16),
+                            rx.text(AppState.contact_us_text),
+                        ),
+                        on_click=AppState.open_contact_form,
+                        variant="soft",
+                        color_scheme=PRIMARY_COLOR_SCHEME,
+                        size="3",
+                        width="auto",
+                    ),
+                    width="100%",
+                    align_items="center",
+                    spacing="3",
+                ),
+                
+                width="100%",
+                spacing="2",
+                padding="2em",
+            ),
+            variant="surface",
+            width="100%",
+            max_width="800px",
+        ),
+        
+        # Estilo general
+        width="100%",
         spacing="4",
+        align_items="center",
+        padding="1em",
+        margin_top="5em",
     )
 
-
 def libros_tab():
-    """Contenido de la pestaña de libros."""
-    return rx.box(
-        rx.vstack(
-            # Contenido principal directamente sin el flex intermediario
-            rx.heading(
-                "📚 Biblioteca Digital", size="7", mb="1em", text_align="center"
+    """Contenido de la pestaña de libros digitales."""
+    return rx.vstack(
+        # Encabezado con robot sosteniendo tableta
+        rx.center(
+            rx.hstack(
+                rx.heading("📚 " + AppState.digital_library_title, size="6"),
+                rx.image(src="/robot_libros.png", width="80px", height="80px", ml="3em"),
+                width="auto",
+                justify="center",
+                align_items="center",
+                mb="2em",
             ),
-            rx.text(
-                "¡Embárcate en una aventura de conocimiento con solo un clic!",
-                color="gray.500",
-                mb="1.5em",
-                text_align="center",
-                font_size="lg",
-            ),
-            error_callout(AppState.error_message_ui),
-            # Contenedor principal de selección
-            rx.box(
-                rx.grid(
-                    # Primer selector: Curso
-                    rx.select(
-                        AppState.cursos_list,
-                        placeholder="Selecciona un Curso...",
-                        on_change=AppState.handle_libros_curso_change,
-                        value=AppState.selected_curso,
-                        size="3",
-                        variant="soft",
-                        color_scheme=PRIMARY_COLOR_SCHEME,
-                        w="100%",
-                    ),
-                    # Segundo selector: Libro
-                    rx.select(
-                        AppState.libros_para_curso,
-                        placeholder="Selecciona un Libro...",
-                        on_change=AppState.handle_libros_libro_change,
-                        value=AppState.selected_libro,
-                        size="3",
-                        variant="soft",
-                        color_scheme=PRIMARY_COLOR_SCHEME,
-                        w="100%",
-                        is_disabled=rx.cond(
-                            (AppState.selected_curso == "")
-                            | (AppState.selected_curso == "Error al Cargar Cursos"),
-                            True,
-                            False,
-                        ),
-                    ),
-                    columns="1",
-                    spacing="3",  # Reducido de 4 a 3
-                    w="100%",
+        ),
+        
+        rx.text(
+            AppState.digital_library_desc,
+            color="gray.500",
+            mb="2em",
+            text_align="center",
+            max_width="600px",
+        ),
+        error_callout(AppState.error_message_ui),
+        rx.card(
+            rx.vstack(
+                rx.select(
+                    AppState.cursos_list,
+                    placeholder=AppState.select_course_placeholder,
+                    value=AppState.selected_curso,
+                    on_change=AppState.handle_libros_curso_change,
+                    size="3",
+                    color_scheme=PRIMARY_COLOR_SCHEME,
+                    width="100%",
                 ),
-                width="100%",
-                max_width="400px",
-            ),
-            # Botón de descarga con tamaño fijo
-            rx.box(
+                rx.select(
+                    AppState.libros_para_curso,
+                    placeholder=AppState.select_book_placeholder,
+                    value=AppState.selected_libro,
+                    on_change=AppState.handle_libros_libro_change,
+                    size="3",
+                    color_scheme=PRIMARY_COLOR_SCHEME,
+                    width="100%",
+                    is_disabled=rx.cond(
+                        (AppState.selected_curso == "") | (AppState.selected_curso == "Error al Cargar Cursos"),
+                        True,
+                        False,
+                    ),
+                ),
                 rx.cond(
                     (AppState.selected_curso != "") & (AppState.selected_libro != ""),
                     rx.link(
@@ -1902,6 +2711,7 @@ def libros_tab():
                             color_scheme="green",
                             variant="solid",
                             width="100%",
+                            margin_top="1em",
                         ),
                         href=AppState.pdf_url,
                         is_external=False,
@@ -1916,88 +2726,280 @@ def libros_tab():
                         size="3",
                         width="100%",
                         color_scheme="gray",
+                        margin_top="1em",
                     ),
                 ),
                 width="100%",
-                max_width="400px",
+                spacing="4",
+                padding="2em",
             ),
-            spacing="3",
+            variant="surface",
             width="100%",
-            max_width="600px",
-            p="1.5em",
-            align_items="center",
-            # Propiedades para centrar todo el contenido en la página
-            margin="0 auto",
-            margin_top="9em",  # Aumentado de 4em a 5.5em para bajar un poco más el título
-            min_height="calc(100vh - 150px)",
-            justify_content="flex-start",  # Alinear al inicio para que esté arriba
+            max_width="500px",
+        ),
+        rx.cond(
+            (AppState.selected_curso != "") & (AppState.selected_libro != ""),
+            rx.card(
+                rx.vstack(
+                    rx.center(
+                        rx.vstack(
+                            rx.heading("INFORMACIÓN DEL LIBRO", size="5", mb="1em", text_align="center"),
+                            rx.center(
+                                rx.heading(AppState.selected_libro, size="4", mb="0.5em", text_align="center"),
+                                width="100%",
+                            ),
+                            rx.center(
+                                rx.text(
+                                    f"Curso: {AppState.selected_curso}",
+                                    color="gray.500",
+                                    mb="0.5em",
+                                    text_align="center",
+                                ),
+                                width="100%",
+                            ),
+                        ),
+                        width="100%"
+                    ),
+                    rx.box(
+                        rx.vstack(
+                            rx.center(
+                                rx.text(
+                                    "Este libro contiene material educativo importante para tu aprendizaje.",
+                                    mb="1em",
+                                    text_align="center",
+                                ),
+                                width="100%",
+                            ),                            
+                            # Centrar los botones usando vstack con hstack anidados (2x2)
+                            rx.vstack(
+                                # Primera fila de botones
+                                rx.hstack(
+                                    # Botón 1: Crear Resumen
+                                    rx.link(
+                                        rx.button(
+                                            rx.vstack(
+                                                rx.icon("file-text", mb="0.3em"),
+                                                rx.text("Crear", font_size="0.9em"),
+                                                rx.text("Resumen", font_size="0.9em"),
+                                                spacing="0",
+                                                justify="center",
+                                                align_items="center",
+                                                width="100%",
+                                            ),
+                                            variant="surface",
+                                            size="3",
+                                            color_scheme="blue",  # Color azul para Resúmenes
+                                            width="100%",
+                                            height="70px",
+                                        ),
+                                        on_click=lambda: AppState.set_active_tab("resumen"),
+                                        text_decoration="none",
+                                        width="50%",
+                                    ),
+                                    
+                                    # Botón 2: Crear Mapa
+                                    rx.link(
+                                        rx.button(
+                                            rx.vstack(
+                                                rx.icon("map", mb="0.3em"),
+                                                rx.text("Crear", font_size="0.9em"),
+                                                rx.text("Mapa", font_size="0.9em"),
+                                                spacing="0",
+                                                justify="center",
+                                                align_items="center",
+                                                width="100%",
+                                            ),
+                                            variant="surface",
+                                            size="3",
+                                            color_scheme=ACCENT_COLOR_SCHEME,  # Color amarillo para Mapas
+                                            width="100%",
+                                            height="70px",
+                                        ),
+                                        on_click=lambda: AppState.set_active_tab("mapa"),
+                                        text_decoration="none",
+                                        width="50%",
+                                    ),
+                                    spacing="2",
+                                    width="100%",
+                                ),
+                                
+                                # Segunda fila de botones
+                                rx.hstack(
+                                    # Botón 3: Crear Cuestionario
+                                    rx.link(
+                                        rx.button(
+                                            rx.vstack(
+                                                rx.icon("list-checks", mb="0.3em"),
+                                                rx.text("Crear", font_size="0.9em"),
+                                                rx.text("Cuestionario", font_size="0.9em"),
+                                                spacing="0",
+                                                justify="center",
+                                                align_items="center",
+                                                width="100%",
+                                            ),
+                                            variant="surface",
+                                            size="3",
+                                            color_scheme="cyan",  # Color azul pálido para Cuestionarios
+                                            width="100%",
+                                            height="70px",
+                                        ),
+                                        on_click=lambda: AppState.set_active_tab("cuestionario"),
+                                        text_decoration="none",
+                                        width="50%",
+                                    ),
+                                    
+                                    # Botón 4: Crear Evaluación
+                                    rx.link(
+                                        rx.button(
+                                            rx.vstack(
+                                                rx.icon("clipboard-check", mb="0.3em"),
+                                                rx.text("Crear", font_size="0.9em"),
+                                                rx.text("Evaluación", font_size="0.9em"),
+                                                spacing="0",
+                                                justify="center",
+                                                align_items="center",
+                                                width="100%",
+                                            ),
+                                            variant="surface",
+                                            size="3",
+                                            color_scheme="purple",  # Color morado para Evaluaciones
+                                            width="100%",
+                                            height="70px",
+                                        ),
+                                        on_click=lambda: AppState.set_active_tab("evaluacion"),
+                                        text_decoration="none",
+                                        width="50%",
+                                    ),
+                                    spacing="2",
+                                    width="100%",
+                                ),
+                                spacing="2",
+                                width="100%",
+                                align_items="center",
+                                justify_content="center",
+                            ),
+                            width="100%",
+                            align_items="flex_start",
+                            spacing="2",
+                        ),
+                        width="100%",
+                    ),
+                    width="100%",
+                    padding="2em",
+                    spacing="4",
+                ),
+                variant="surface",
+                width="100%",
+                max_width="500px",
+                margin_top="2em",
+            ),
         ),
         width="100%",
+        spacing="4",
+        align_items="center",
+        padding="1em",
+        margin_top="5em",
     )
-
 
 def main_dashboard():
-    return rx.vstack(
-        rx.hstack(
-            rx.icon("graduation-cap", size=28, color_scheme=PRIMARY_COLOR_SCHEME),
-            rx.heading("SMART", size="5", weight="bold"),
-            rx.heading("STUDENT", size="5", weight="light", color_scheme="gray"),
-            rx.spacer(),
-            rx.color_mode.switch(size="2"),
-            rx.tooltip(
-                rx.button(
-                    rx.icon("log-out", size=16),
-                    on_click=AppState.logout,
-                    color_scheme="red",
-                    variant="soft",
-                    size="2",
-                ),
-                content="Cerrar Sesión",
-            ),
-            p="1.5em 2em 1.5em 2em",
-            w="100%",
-            bg="var(--gray-1)",
-            border_bottom="1px solid var(--gray-4)",
-            position="sticky",
-            top="0",
-            z_index="10",
-            align_items="center",
-            justify="start",
-            mb="0.5em",
+    # Elementos de navegación fijos
+    header = rx.hstack(
+        rx.icon("graduation-cap", size=28, color_scheme=PRIMARY_COLOR_SCHEME),
+        rx.heading("SMART", size="5", weight="bold"),
+        rx.heading("STUDENT", size="5", weight="light", color_scheme="gray"),
+        rx.spacer(),
+        rx.button(
+            rx.cond(AppState.current_language == "es", "ES", "EN"),
+            variant="soft",
+            size="2",
+            on_click=AppState.toggle_language,
+            aria_label=AppState.switch_language_text,
+            mr="2",
         ),
-        rx.tabs.root(
-            rx.tabs.list(
-                rx.tabs.trigger("Inicio", value="inicio", on_click=lambda: AppState.set_active_tab("inicio")),
-                rx.tabs.trigger("Libros", value="libros", on_click=lambda: AppState.set_active_tab("libros")),
-                rx.tabs.trigger("Resúmenes", value="resumen", on_click=lambda: AppState.set_active_tab("resumen")),
-                rx.tabs.trigger("Mapas", value="mapa", on_click=lambda: AppState.set_active_tab("mapa")),
-                rx.tabs.trigger("Evaluaciones", value="evaluacion", on_click=lambda: AppState.set_active_tab("evaluacion")),
-                rx.tabs.trigger("Perfil", value="perfil", on_click=lambda: AppState.set_active_tab("perfil")),
-                rx.tabs.trigger("Ayuda", value="ayuda", on_click=lambda: AppState.set_active_tab("ayuda")),
+        rx.color_mode.switch(size="2"),
+        rx.tooltip(
+            rx.button(
+                rx.icon("log-out", size=16),
+                on_click=AppState.logout,
+                color_scheme="red",
+                variant="soft",
                 size="2",
-                w="100%",
-                justify="center",
+            ),
+            content=AppState.sign_out_text,
+        ),
+        p="1.5em 2em", 
+        w="100%", 
+        bg="var(--gray-1)", 
+        border_bottom="1px solid var(--gray-4)",
+        position="sticky", 
+        top="0", 
+        z_index="10", 
+        align_items="center", 
+        justify="start",
+        height="64px",  # Altura fija para el encabezado
+    )
+    
+    # Creamos un contenedor fijo solo para el encabezado
+    header_container = rx.box(
+        header,
+        position="sticky",
+        top="0",
+        z_index="10",
+        w="100%",
+        bg="var(--gray-1)",
+    )
+    
+    # Usando correctamente la estructura de Tabs de Radix UI, con todos los componentes anidados adecuadamente
+    tabs_section = rx.tabs.root(
+        # La barra de navegación con pestañas que se quedará fija bajo el encabezado
+        rx.box(
+            rx.tabs.list(
+                rx.tabs.trigger(AppState.tab_inicio_text, value="inicio", on_click=lambda: AppState.set_active_tab("inicio"), py="0.75em"),
+                rx.tabs.trigger(AppState.tab_libros_text, value="libros", on_click=lambda: AppState.set_active_tab("libros"), py="0.75em"),
+                rx.tabs.trigger(AppState.tab_resumen_text, value="resumen", on_click=lambda: AppState.set_active_tab("resumen"), py="0.75em"),
+                rx.tabs.trigger(AppState.tab_mapa_text, value="mapa", on_click=lambda: AppState.set_active_tab("mapa"), py="0.75em"),
+                rx.tabs.trigger(AppState.tab_cuestionario_text, value="cuestionario", on_click=lambda: AppState.set_active_tab("cuestionario"), py="0.75em"),
+                rx.tabs.trigger(AppState.tab_evaluacion_text, value="evaluacion", on_click=lambda: AppState.set_active_tab("evaluacion"), py="0.75em"),
+                rx.tabs.trigger(AppState.tab_perfil_text, value="perfil", on_click=lambda: AppState.set_active_tab("perfil"), py="0.75em"),
+                rx.tabs.trigger(AppState.tab_ayuda_text, value="ayuda", on_click=lambda: AppState.set_active_tab("ayuda"), py="0.75em"),
+                size="2", 
+                w="100%", 
+                justify="center", 
                 border_bottom="1px solid var(--gray-6)",
             ),
-            rx.tabs.content(inicio_tab(), value="inicio"),
-            rx.tabs.content(libros_tab(), value="libros"),
-            rx.tabs.content(resumen_tab(), value="resumen"),
-            rx.tabs.content(mapa_tab(), value="mapa"),
-            rx.tabs.content(evaluacion_tab(), value="evaluacion"),
-            rx.tabs.content(perfil_tab(), value="perfil"),
-            rx.tabs.content(ayuda_tab(), value="ayuda"),
-            value=AppState.active_tab,
+            position="sticky",
+            top="64px",  # Ajustado para coincidir exactamente con la altura del encabezado
+            z_index="9",
+            bg="var(--gray-1)",
+            box_shadow="0 2px 4px rgba(0, 0, 0, 0.1)",
             w="100%",
-            h="calc(100vh - 60px)",
         ),
+        # El contenido de las pestañas, cada uno visible según la pestaña activa
+        rx.tabs.content(inicio_tab(), value="inicio"),
+        rx.tabs.content(libros_tab(), value="libros"),
+        rx.tabs.content(resumen_tab(), value="resumen"),
+        rx.tabs.content(mapa_tab(), value="mapa"),
+        rx.tabs.content(cuestionario_tab_content(), value="cuestionario"),
+        rx.tabs.content(evaluacion_tab(), value="evaluacion"),
+        rx.tabs.content(perfil_tab(), value="perfil"),
+        rx.tabs.content(ayuda_tab(), value="ayuda"),
+        # Valor de la pestaña activa y estilos generales para el componente Tabs
+        value=AppState.active_tab,
         w="100%",
-        h="100vh",
-        spacing="0",
-        align_items="stretch",
     )
+    
+    # Envolver todo en un vstack con fondo consistente
+    return rx.vstack(
+        header_container,
+        tabs_section,
+        w="100%", 
+        h="100vh",
+        bg="var(--gray-1)",  # Fondo consistente para todo el contenedor 
+        align_items="stretch", 
+        spacing="0",
+     )
 
-
-# --- Definición y Configuración de la App ---
+# Definición y Configuración de la App
 app = rx.App(
     stylesheets=GOOGLE_FONT_STYLESHEET,
     style={"font_family": FONT_FAMILY},
@@ -2008,24 +3010,19 @@ app = rx.App(
         scaling="100%",
     ),
 )
+
+# En Reflex 0.7.5, no se usa app.add_state(), pero tampoco app.add_page_route
+# La forma correcta es asociar el estado con la página en la definición
 rx.Config.static_dir = "assets"
-rx.Config.title = (
-    "Smart Student | Aprende, Crea y Destaca"  # Configurar el título de la aplicación
-)
-rx.Config.favicon = "/favicon.ico"  # Configurar el favicon correctamente
+rx.Config.title = "Smart Student | Aprende, Crea y Destaca"
+rx.Config.favicon = "/favicon.ico"
 
-
-# --- Página Principal ---
 @app.add_page
 def index() -> rx.Component:
-    """Página principal: renderiza login o dashboard."""
     return rx.fragment(
         rx.script(
             "document.title = 'Smart Student | Aprende, Crea y Destaca'"
-        ),  # También actualizar aquí para consistencia
+        ),
         rx.html('<link rel="icon" type="image/x-icon" href="/smartstudent_icon.ico">'),
         rx.cond(AppState.is_logged_in, main_dashboard(), login_page()),
     )
-
-
-# FIN DEL SCRIPT - Asegúrate que no haya código extra después de esto.
