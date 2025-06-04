@@ -12,9 +12,9 @@ def mensaje_respuesta_correcta():
     return rx.box(
         rx.hstack(
             rx.icon(
-                tag="check_circle",
+                tag="check",
                 color="green.500",
-                size="20px"
+                size=20
             ),
             rx.text(
                 "¡Correcto! / Correct!",
@@ -39,9 +39,9 @@ def mensaje_respuesta_incorrecta():
     return rx.box(
         rx.hstack(
             rx.icon(
-                tag="x_circle",
+                tag="x",
                 color="red.500",
-                size="20px"
+                size=20
             ),
             rx.text(
                 "Incorrecto / Incorrect",
