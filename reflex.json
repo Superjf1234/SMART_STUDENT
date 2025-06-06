@@ -1,0 +1,54 @@
+{
+  "name": "SMART_STUDENT",
+  "version": "1.0.0",
+  "description": "Aplicación educativa inteligente para generar resúmenes, mapas conceptuales y evaluaciones",
+  "app_name": "mi_app_estudio",
+  "title": "Smart Student | Aprende, Crea y Destaca",
+  "author": "SMART_STUDENT Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Superjf1234/SMART_STUDENT.git"
+  },
+  "main_module": "mi_app_estudio.mi_app_estudio",
+  "requirements": [
+    "reflex>=0.3.6",
+    "pypdf>=3.0.0",
+    "passlib>=1.7.4",
+    "bcrypt==3.2.2",
+    "python-dotenv>=0.19.0",
+    "requests>=2.31.0",
+    "pillow>=11.0.0",
+    "selenium>=4.10.0",
+    "fpdf>=1.7.2",
+    "gunicorn>=21.0.0"
+  ],
+  "deployment": {
+    "host": "0.0.0.0",
+    "port": 3000,
+    "backend_port": 8001,
+    "env": "production"
+  },
+  "build": {
+    "include_assets": [
+      "assets/",
+      "backend/",
+      "mi_app_estudio/"
+    ],
+    "exclude": [
+      ".venv/",
+      "venv/",
+      "__pycache__/",
+      "*.pyc",
+      ".git/",
+      "node_modules/",
+      ".web/"
+    ]
+  },
+  "features": {
+    "backend_only": false,
+    "frontend": true,
+    "database": true,
+    "authentication": true
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "smart-student",
+  "version": 2,
+  "builds": [
+    {
+      "src": "mi_app_estudio/mi_app_estudio.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "mi_app_estudio/mi_app_estudio.py"
+    }
+  ],
+  "env": {
+    "PYTHONPATH": "/var/task",
+    "REFLEX_ENV": "production"
+  },
+  "functions": {
+    "mi_app_estudio/mi_app_estudio.py": {
+      "runtime": "python3.12"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: smart-student
+    env: python
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python -m reflex run --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHONPATH
+        value: /opt/render/project/src
+      - key: REFLEX_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        fromGroup: secrets
+    autoDeploy: true
+    healthCheckPath: /
+    disk:
+      name: smart-student-disk
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
