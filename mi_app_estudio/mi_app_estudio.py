@@ -1016,10 +1016,9 @@ def login_page():
                                 mt="0.5em",
                                 text_align="center",
                             ),
-                        ),
-                        rx.button(
+                        ),                        rx.button(
                             AppState.login_button_text,
-                            type="submit",
+                            on_click=AppState.handle_login,
                             width="100%",
                             color_scheme=PRIMARY_COLOR_SCHEME,
                             size="3",

@@ -1,0 +1,78 @@
+nohup: ignoring input
+───────────────────────────── Starting Reflex App ──────────────────────────────
+INFO (config_logic): Cargados 12 cursos con sus libros correspondientes
+  - 1ro Básico: 4 libros
+  - 2do Básico: 4 libros
+  - 3ro Básico: 4 libros
+  - 4to Básico: 4 libros
+  - 5to Básico: 4 libros
+  - 6to Básico: 4 libros
+  - 7mo Básico: 4 libros
+  - 8vo Básico: 4 libros
+  - 1ro Medio: 6 libros
+  - 2do Medio: 6 libros
+  - 3ro Medio: 3 libros
+  - 4to Medio: 3 libros
+INFO (config_logic): Hashes de ejemplo cargados (¡SOLO PARA DESARROLLO!)
+INFO (login_logic): Usando 'validar_credenciales' desde .config_logic
+INFO (resumen_logic): Usando import relativo para config_logic
+INFO (resumen_logic): FPDF disponible para generar PDFs.
+INFO (db_logic): Base de datos inicializada / tabla asegurada.
+INFO: Base de datos inicializada.
+INFO: Módulos de backend importados correctamente.
+INFO (db_logic): Base de datos inicializada / tabla asegurada.
+INFO: Base de datos inicializada.
+INFO: Módulos de backend importados correctamente.
+Warning: Invalid icon tag: check_circle. Please use one of the following: 
+check_check, loader_circle, message_circle, message_circle_code, 
+message_circle_dashed, message_circle_heart, message_circle_more, 
+message_circle_off, message_circle_plus, message_circle_question, ...
+See full list at https://reflex.dev/docs/library/data-display/icon/#icons-list. 
+Using 'circle-help' icon instead.
+DEBUG (RENDER evaluacion_tab): Estado ACTUAL -> Curso='<reflex.Var>6860106580414636388</reflex.Var>reflex___state____state__mi_app_estudio___state____app_state.selected_curso', Libro='<reflex.Var>2446431219419606468</reflex.Var>reflex___state____state__mi_app_estudio___state____app_state.selected_libro', Tema='<reflex.Var>841767502688069096</reflex.Var>reflex___state____state__mi_app_estudio___state____app_state.selected_tema', EvalActiva=<reflex.Var>-7486711721301106119</reflex.Var>reflex___state____state__mi_app_estudio___state____app_state__mi_app_estudio___evaluaciones____evaluation_state.is_eval_active
+Warning: Invalid icon tag: check_circle. Please use one of the following: 
+check_check, loader_circle, message_circle, message_circle_code, 
+message_circle_dashed, message_circle_heart, message_circle_more, 
+message_circle_off, message_circle_plus, message_circle_question, ...
+See full list at https://reflex.dev/docs/library/data-display/icon/#icons-list. 
+Using 'circle-help' icon instead.
+Warning: Invalid icon tag: x_circle. Please use one of the following: 
+loader_circle, message_circle, message_circle_code, message_circle_dashed, 
+message_circle_heart, message_circle_more, message_circle_off, 
+message_circle_plus, message_circle_question, message_circle_reply, ...
+See full list at https://reflex.dev/docs/library/data-display/icon/#icons-list. 
+Using 'circle-help' icon instead.
+Warning: Invalid icon tag: check_circle. Please use one of the following: 
+check_check, loader_circle, message_circle, message_circle_code, 
+message_circle_dashed, message_circle_heart, message_circle_more, 
+message_circle_off, message_circle_plus, message_circle_question, ...
+See full list at https://reflex.dev/docs/library/data-display/icon/#icons-list. 
+Using 'circle-help' icon instead.
+Warning: Invalid icon tag: x_circle. Please use one of the following: 
+loader_circle, message_circle, message_circle_code, message_circle_dashed, 
+message_circle_heart, message_circle_more, message_circle_off, 
+message_circle_plus, message_circle_question, message_circle_reply, ...
+See full list at https://reflex.dev/docs/library/data-display/icon/#icons-list. 
+Using 'circle-help' icon instead.
+Warning: Invalid icon tag: check_circle. Please use one of the following: 
+check_check, loader_circle, message_circle, message_circle_code, 
+message_circle_dashed, message_circle_heart, message_circle_more, 
+message_circle_off, message_circle_plus, message_circle_question, ...
+See full list at https://reflex.dev/docs/library/data-display/icon/#icons-list. 
+Using 'circle-help' icon instead.
+Warning: Invalid icon tag: x_circle. Please use one of the following: 
+loader_circle, message_circle, message_circle_code, message_circle_dashed, 
+message_circle_heart, message_circle_more, message_circle_off, 
+message_circle_plus, message_circle_question, message_circle_reply, ...
+See full list at https://reflex.dev/docs/library/data-display/icon/#icons-list. 
+Using 'circle-help' icon instead.
+Warning: Invalid icon tag: question_mark. Please use one of the following: 
+file_question, mail_question, message_circle_question, shield_question, 
+book_marked, git_pull_request, git_pull_request_arrow, git_pull_request_closed, 
+git_pull_request_create, git_pull_request_create_arrow, ...
+See full list at https://reflex.dev/docs/library/data-display/icon/#icons-list. 
+Using 'circle-help' icon instead.
+[15:18:56] Compiling: ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 16/16 0:00:02
+───────────────────────────────── App Running ──────────────────────────────────
+App running at: http://localhost:3000
+Backend running at: http://0.0.0.0:8001
