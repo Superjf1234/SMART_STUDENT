@@ -39,4 +39,4 @@ ENV PYTHONPATH=/app
 ENV REFLEX_ENV=production
 
 # Comando para ejecutar la aplicación
-CMD ["python", "-m", "reflex", "run", "--host", "0.0.0.0", "--port", "3000"]
+CMD ["python", "-m", "reflex", "run", "--backend-host", "0.0.0.0", "--backend-port", "3000"]
