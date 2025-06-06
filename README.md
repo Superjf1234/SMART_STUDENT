@@ -133,7 +133,7 @@ La aplicación usa SQLite y se inicializa automáticamente al primer ejecutar.
 
 ### Ejecutar en Desarrollo
 ```bash
-python -m reflex run --host 0.0.0.0 --port 3000
+python -m reflex run --backend-host 0.0.0.0 --backend-port 3000
 ```
 
 ### Ejecutar Tests
