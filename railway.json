@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "./start.sh",
+    "startCommand": "python -m reflex run --backend-host 0.0.0.0 --backend-port $PORT",
     "healthcheckPath": "/",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
@@ -14,8 +14,7 @@
     "production": {
       "variables": {
         "PYTHONPATH": "/app",
-        "REFLEX_ENV": "production",
-        "NODE_ENV": "production"
+        "REFLEX_ENV": "production"
       }
     }
   }
