@@ -1,6 +1,9 @@
 import os
 import traceback
+import reflex as rx
 from . import config_logic, resumen_logic
+from ..state import AppState
+from ..shared import ACCENT_COLOR_SCHEME
 
 def extraer_texto_pdf(curso, libro):
     """Extrae el texto del PDF especificado."""
@@ -348,35 +351,3 @@ def mapa_tab_content() -> rx.Component:
         ),
         padding="2em",  # Espaciado general alrededor del contenido
     )
-
-html_content = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Mapa Conceptual: {tema}</title>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-    <style>
-        /* Estilos... */
-    </style>
-</head>
-<body>
-    <div class="mermaid">
-        {self.mapa_mermaid_code}
-    </div>
-    <script>
-        mermaid.initialize({{
-            /* Configuración... */
-        }});
-        // Agregar script para descargar automáticamente
-        document.addEventListener('DOMContentLoaded', function() {{
-            // Crear enlace invisible
-            var link = document.createElement('a');
-            link.href = 'data:image/png;base64,' + window.btoa(document.querySelector('.mermaid svg').outerHTML);
-            link.download = 'mapa_conceptual.png';
-            link.click();
-        }});
-    </script>
-</body>
-</html>
-"""

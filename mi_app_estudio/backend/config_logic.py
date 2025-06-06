@@ -1,3 +1,5 @@
+import os
+
 def obtener_directorio_pdf(curso):
     """Obtiene el directorio para los PDFs de un curso."""
     curso_folder_name = "".join(
