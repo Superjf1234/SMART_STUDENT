@@ -1,0 +1,22 @@
+Help on function computed_var in module reflex.vars.base:
+
+ccoommppuutteedd__vvaarr(fget: 'Callable[[BASE_STATE], Any] | None' = None, initial_value: 'Any | types.Unset' = Unset, cache: 'bool' = True, deps: 'list[str | Var] | None' = None, auto_deps: 'bool' = True, interval: 'datetime.timedelta | int | None' = None, backend: 'bool | None' = None, **kwargs) -> 'ComputedVar | Callable[[Callable[[BASE_STATE], Any]], ComputedVar]'
+    A ComputedVar decorator with or without kwargs.
+
+    Args:
+        fget: The getter function.
+        initial_value: The initial value of the computed var.
+        cache: Whether to cache the computed value.
+        deps: Explicit var dependencies to track.
+        auto_deps: Whether var dependencies should be auto-determined.
+        interval: Interval at which the computed var should be updated.
+        backend: Whether the computed var is a backend var.
+        **kwargs: additional attributes to set on the instance
+
+    Returns:
+        A ComputedVar instance.
+
+    Raises:
+        ValueError: If caching is disabled and an update interval is set.
+        VarDependencyError: If user supplies dependencies without caching.
+        ComputedVarSignatureError: If the getter function has more than one argument.

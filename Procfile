@@ -1,1 +1,1 @@
-web: python -m reflex run --host 0.0.0.0 --port $PORT
+web: python -m reflex run --backend-host 0.0.0.0 --backend-port $PORT

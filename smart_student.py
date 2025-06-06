@@ -51,20 +51,20 @@ class State(rx.State):
     eval_status: str = "" # Para saber si fue EXITO o ERROR
 
     # --- Listas para Selectores ---
-    @rx.cached_var
+    @rx.var
     def lista_cursos(self) -> list[str]:
         return config_logic.obtener_lista_cursos()
 
-    @rx.cached_var
+    @rx.var
     def lista_libros_resumen(self) -> list[str]:
         return list(config_logic.CURSOS.get(self.resumen_curso, {}).keys())
 
-    @rx.cached_var
+    @rx.var
     def lista_libros_mapa(self) -> list[str]:
         return list(config_logic.CURSOS.get(self.mapa_curso, {}).keys())
 
     # --- NUEVO: Lista de libros para Evaluaciones ---
-    @rx.cached_var
+    @rx.var
     def lista_libros_eval(self) -> list[str]:
         return list(config_logic.CURSOS.get(self.eval_curso, {}).keys())
 

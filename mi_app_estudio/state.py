@@ -2567,11 +2567,17 @@ class AppState(rx.State):
                     <h3>Curso: {self.selected_curso} - Libro: {self.selected_libro}</h3>
                     <hr>
                     <div class="resumen">
-                        {self.resumen_content.replace('\n', '<br>')}
-                    </div>
+                        {self.resumen_content.replace(chr(10), '<br>')}
+                    </div>"""
                     
-                    {f'<h2>Puntos Clave:</h2><div class="puntos">{self.puntos_content.replace("\n", "<br>")}</div>' if self.puntos_content and self.include_puntos else ''}
-                    
+                # Add puntos section if needed
+                if self.puntos_content and self.include_puntos:
+                    puntos_html = self.puntos_content.replace('\n', '<br>')
+                    html_content += f"""
+                    <h2>Puntos Clave:</h2>
+                    <div class="puntos">{puntos_html}</div>"""
+                
+                html_content += f"""
                     <hr>
                     <footer>
                         <p><i>Generado por SMART_STUDENT el {datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")}</i></p>
