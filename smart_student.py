@@ -1,5 +1,6 @@
 import reflex as rx
 import asyncio  # Necesario para yield si se usa
+import traceback  # For error handling
 
 # Importar lógica de backend
 from backend import config_logic, resumen_logic, map_logic, eval_logic, db_logic

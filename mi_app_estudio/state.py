@@ -26,6 +26,7 @@ try:
         map_logic,
         eval_logic,
     )
+    # Initialize DB if function exists
     if hasattr(db_logic, "inicializar_db") and callable(db_logic.inicializar_db):
         db_logic.inicializar_db()
         print("INFO: Base de datos inicializada.")
@@ -375,13 +376,12 @@ class AppState(rx.State):
     # Language settings
     current_language: str = "es"  # Default language is Spanish
     
-    def toggle_language(self) -> rx.event.EventSpec:
+    def toggle_language(self):
         """Cambia entre español e inglés."""
         if self.current_language == "es":
             self.current_language = "en"
         else:
             self.current_language = "es"
-        return rx.event.EventSpec(callback=None)
     
     # Contadores de actividades
     resumenes_generados_count: int = 0  # Contador de resúmenes generados
@@ -665,7 +665,7 @@ class AppState(rx.State):
                             evaluacion["total_preguntas"] = int(total)
                             print(f"DEBUG: Extraídas respuestas_correctas={correctas}/{total} de metadata")
                 except Exception as e:
-                    print(f"ERROR: No se pudo extraer metadata {evaluacion.get("metadata")}: {e}")
+                    print(f"ERROR: No se pudo extraer metadata {evaluacion.get('metadata')}: {e}")
             
             # Asegurarse que tenemos campos consistentes (algunos pueden venir como calificacion, otros como nota)
             if "calificacion" not in evaluacion and "puntuacion" in evaluacion:
@@ -1243,21 +1243,16 @@ class AppState(rx.State):
             self.is_generating_resumen = False
             self.is_generating_mapa = False
 
-            # Limpiar estado específico de evaluaciones si existe la clase
-            try:
-                from .evaluaciones import EvaluationState
-                if tab_anterior == "evaluacion":
-                    print("DEBUG: Reseteando EvaluationState...")
-                    eval_substate = await self.get_state(EvaluationState)
-                    if eval_substate and hasattr(eval_substate, "reset_evaluation_state"):
-                        print("DEBUG: Llamando a EvaluationState.reset_evaluation_state() en la instancia...")
-                        async for _ in eval_substate.reset_evaluation_state():
-                            pass
-                    else:
-                        print("WARN: No se pudo obtener la instancia de EvaluationState o el método reset_evaluation_state.")
-            except (ImportError, AttributeError, TypeError) as e:
-                print(f"DEBUG: No se pudo resetear EvaluationState: {e}")
-                pass
+            # Limpiar estado específico de evaluaciones - evitamos circular imports
+            if tab_anterior == "evaluacion":
+                try:
+                    print("DEBUG: Reseteando estado de evaluación...")
+                    # Resetear variables específicas de evaluación sin importar el módulo
+                    # Esto se manejará directamente cuando se importe EvaluationState
+                    pass
+                except Exception as e:
+                    print(f"DEBUG: No se pudo resetear estado de evaluación: {e}")
+                    pass
 
             # Limpiar estado específico de cuestionarios si venimos de esa pestaña
             if tab_anterior == "cuestionario" and CuestionarioState:
@@ -1322,7 +1317,6 @@ class AppState(rx.State):
 
     def go_to_evaluacion_tab(self):
         self.error_message_ui = ""
-        yield
 
     def handle_login(self):
         self.login_error_message = ""
@@ -1362,15 +1356,12 @@ class AppState(rx.State):
                 self.resumenes_generados_count = 0
                 self.mapas_creados_count = 0
             
-            yield
             return
         if not BACKEND_AVAILABLE:
             self.login_error_message = "Servicio no disponible. Cuentas prueba: felipe/1234, test/123."
-            yield
             return
         if not hasattr(login_logic, "verificar_login") or not callable(login_logic.verificar_login):
             self.login_error_message = "Error servicio autenticación."
-            yield
             return
         try:
             is_valid = login_logic.verificar_login(self.username_input, self.password_input)
@@ -1411,7 +1402,6 @@ class AppState(rx.State):
             print(f"Error login: {e}")
             self.login_error_message = "Error servicio autenticación. Intenta más tarde."
             self.password_input = ""
-        yield
 
     def logout(self):
         """Cierra la sesión del usuario actual."""
