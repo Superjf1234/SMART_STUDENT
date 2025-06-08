@@ -39,4 +39,4 @@ ENV PYTHONPATH=/app
 ENV REFLEX_ENV=production
 
 # Comando para ejecutar la aplicación
-CMD ["sh", "-c", "python -m reflex run --backend-host 0.0.0.0 --backend-port ${PORT:-8000} --frontend-host 0.0.0.0 --frontend-port 3000"]
+CMD ["bash", "start_railway.sh"]

@@ -869,12 +869,7 @@ def create_card(
 ):
     return rx.card(
         rx.vstack(
-            rx.box(
-                rx.icon(icon, size=52, color=f"var(--{color_scheme}-9)"),
-                width="100%",
-                display="flex",
-                justify_content="center",
-            ),
+            rx.icon(icon, size=52, color=f"var(--{color_scheme}-9)"),
             rx.heading(title, size="4", mt="0.5em", text_align="center", flex_grow=0),
             rx.text(
                 description,
@@ -1016,9 +1011,10 @@ def login_page():
                                 mt="0.5em",
                                 text_align="center",
                             ),
-                        ),                        rx.button(
+                        ),
+                        rx.button(
                             AppState.login_button_text,
-                            on_click=AppState.handle_login,
+                            type="submit",
                             width="100%",
                             color_scheme=PRIMARY_COLOR_SCHEME,
                             size="3",
@@ -1191,10 +1187,9 @@ def resumen_tab():
         rx.center(
             rx.hstack(
                 rx.heading(
-                    "📄 " + rx.cond(
-                        AppState.current_language == "es",
-                        "Genera Resúmenes Inteligentes",
-                        "Generate Smart Summaries"
+                    "📄 " + (
+                        "Genera Resúmenes Inteligentes" if AppState.current_language == "es" 
+                        else "Generate Smart Summaries"
                     ), 
                     size="6"
                 ),
@@ -1222,11 +1217,7 @@ def resumen_tab():
             rx.vstack(
                 rx.select(
                     AppState.cursos_list,
-                    placeholder=rx.cond(
-                        AppState.current_language == "es",
-                        "Selecciona un Curso...",
-                        "Select a Course..."
-                    ),
+                    placeholder="Selecciona un Curso...",
                     value=AppState.selected_curso,
                     on_change=AppState.handle_curso_change,
                     size="3",
@@ -1235,11 +1226,7 @@ def resumen_tab():
                 ),
                 rx.select(
                     AppState.libros_para_curso,
-                    placeholder=rx.cond(
-                        AppState.current_language == "es",
-                        "Selecciona un Libro...",
-                        "Select a Book..."
-                    ),
+                    placeholder="Selecciona un Libro...",
                     value=AppState.selected_libro,
                     on_change=AppState.handle_libro_change,
                     size="3",
@@ -1366,15 +1353,7 @@ def resumen_tab():
                     rx.cond(
                         AppState.include_puntos & (AppState.puntos_content != ""),
                         rx.vstack(
-                            rx.heading(
-                                rx.cond(
-                                    AppState.current_language == "es",
-                                    "Puntos Clave",
-                                    "Key Points"
-                                ), 
-                                size="4", 
-                                mb="0.5em"
-                            ),
+                            rx.heading("Puntos Clave", size="4", mb="0.5em"),
                             rx.box(
                                 rx.markdown(AppState.puntos_content),
                                 max_h="55vh",
@@ -1391,11 +1370,7 @@ def resumen_tab():
                         ),
                     ),                    rx.hstack(                        rx.button(
                             rx.icon("download", mr="0.2em"),
-                            rx.cond(
-                                AppState.current_language == "es",
-                                "Descargar PDF",
-                                "Download PDF"
-                            ),
+                            "Descargar PDF",
                             on_click=AppState.download_pdf,
                             variant="soft",
                             size="2",
@@ -1404,11 +1379,7 @@ def resumen_tab():
                         # Omitimos el botón "Crear Resumen" porque estamos en la pestaña de resumen
                         rx.button(
                             rx.icon("git-branch", mr="0.2em"),
-                            rx.cond(
-                                AppState.current_language == "es",
-                                "Crear Mapa",
-                                "Create Mind Map"
-                            ),
+                            "Crear Mapa",
                             on_click=lambda: AppState.set_active_tab("mapa"),
                             variant="soft",
                             size="2",
@@ -1416,11 +1387,7 @@ def resumen_tab():
                         ),
                         rx.button(
                             rx.icon("book-open", mr="0.2em"),
-                            rx.cond(
-                                AppState.current_language == "es",
-                                "Crear Cuestionario",
-                                "Create Quiz"
-                            ),
+                            "Crear Cuestionario",
                             on_click=lambda: AppState.set_active_tab("cuestionario"),
                             variant="soft",
                             size="2",
@@ -1428,11 +1395,7 @@ def resumen_tab():
                         ),
                         rx.button(
                             rx.icon("clipboard-check", mr="0.2em"),
-                            rx.cond(
-                                AppState.current_language == "es",
-                                "Crear Evaluación",
-                                "Create Assessment"
-                            ),
+                            "Crear Evaluación",
                             on_click=lambda: AppState.set_active_tab("evaluacion"),
                             variant="soft",
                             size="2",
@@ -1497,11 +1460,7 @@ def mapa_tab():
             rx.vstack(
                 rx.select(
                     AppState.cursos_list,
-                    placeholder=rx.cond(
-                        AppState.current_language == "es",
-                        "Selecciona un Curso...",
-                        "Select a Course..."
-                    ),
+                    placeholder="Selecciona un Curso...",
                     value=AppState.selected_curso,
                     on_change=AppState.handle_curso_change,
                     size="3",
@@ -1510,11 +1469,7 @@ def mapa_tab():
                 ),
                 rx.select(
                     AppState.libros_para_curso,
-                    placeholder=rx.cond(
-                        AppState.current_language == "es",
-                        "Selecciona un Libro...",
-                        "Select a Book..."
-                    ),
+                    placeholder="Selecciona un Libro...",
                     value=AppState.selected_libro,
                     on_change=AppState.handle_libro_change,
                     size="3",
@@ -1527,11 +1482,7 @@ def mapa_tab():
                     ),
                 ),
                 rx.text_area(
-                    placeholder=rx.cond(
-                        AppState.current_language == "es",
-                        "Tema central del mapa...",
-                        "Central topic of the map..."
-                    ),
+                    placeholder="Tema central del mapa...",
                     value=AppState.selected_tema,
                     on_change=AppState.set_selected_tema,
                     size="3",
@@ -1546,15 +1497,7 @@ def mapa_tab():
                             size="2",
                             color_scheme=ACCENT_COLOR_SCHEME,
                         ),
-                        rx.text(
-                            rx.cond(
-                                AppState.current_language == "es",
-                                "Orientación Horizontal",
-                                "Horizontal Orientation"
-                            ), 
-                            size="2", 
-                            ml="0.5em"
-                        ),
+                        rx.text("Orientación Horizontal", size="2", ml="0.5em"),
                         spacing="2",
                         align_items="center",
                     ),
@@ -1566,18 +1509,8 @@ def mapa_tab():
                 rx.button(
                     rx.cond(
                         AppState.is_generating_mapa,
-                        rx.hstack(rx.spinner(size="2"), 
-                            rx.cond(
-                                AppState.current_language == "es",
-                                "Generando mapa...",
-                                "Generating map..."
-                            )
-                        ),
-                        rx.cond(
-                            AppState.current_language == "es",
-                            "Generar Mapa",
-                            "Generate Map"
-                        )
+                        rx.hstack(rx.spinner(size="2"), "Generando mapa..."),
+                        "Generar Mapa"
                     ),
                     on_click=AppState.generate_map,
                     size="3",
@@ -1604,11 +1537,7 @@ def mapa_tab():
             rx.card(
                 rx.vstack(
                     rx.heading(
-                        rx.cond(
-                            AppState.current_language == "es",
-                            f"MAPA CONCEPTUAL - {AppState.selected_tema.upper()}",
-                            f"MIND MAP - {AppState.selected_tema.upper()}"
-                        ), 
+                        f"MAPA CONCEPTUAL - {AppState.selected_tema.upper()}", 
                         size="5", 
                         mb="1em", 
                         text_align="center",
@@ -1626,11 +1555,7 @@ def mapa_tab():
                         p="0.5em",
                     ),                    rx.hstack(                        rx.button(
                             rx.icon("download", mr="0.2em"),
-                            rx.cond(
-                                AppState.current_language == "es",
-                                "Descargar PDF",
-                                "Download PDF"
-                            ),
+                            "Descargar PDF",
                             on_click=AppState.download_pdf,  # Cambiado de download_map_pdf a download_pdf
                             variant="soft",
                             size="2",
@@ -1638,11 +1563,7 @@ def mapa_tab():
                         ),
                         rx.button(
                             rx.icon("file-text", mr="0.2em"),
-                            rx.cond(
-                                AppState.current_language == "es",
-                                "Crear Resumen",
-                                "Create Summary"
-                            ),
+                            "Crear Resumen",
                             on_click=lambda: AppState.set_active_tab("resumen"),
                             variant="soft",
                             size="2",
@@ -1651,11 +1572,7 @@ def mapa_tab():
                         # Omitimos el botón "Crear Mapa" porque estamos en la pestaña de mapa
                         rx.button(
                             rx.icon("book-open", mr="0.2em"),
-                            rx.cond(
-                                AppState.current_language == "es",
-                                "Crear Cuestionario",
-                                "Create Quiz"
-                            ),
+                            "Crear Cuestionario",
                             on_click=lambda: AppState.set_active_tab("cuestionario"),
                             variant="soft",
                             size="2",
@@ -1663,11 +1580,7 @@ def mapa_tab():
                         ),
                         rx.button(
                             rx.icon("clipboard-check", mr="0.2em"),
-                            rx.cond(
-                                AppState.current_language == "es",
-                                "Crear Evaluación",
-                                "Create Assessment"
-                            ),
+                            "Crear Evaluación",
                             on_click=lambda: AppState.set_active_tab("evaluacion"),
                             variant="soft",
                             size="2",
@@ -1794,55 +1707,21 @@ def perfil_tab():
                         rx.vstack(
                             # Nombre
                             rx.hstack(
-                                rx.text(
-                                    rx.cond(
-                                        AppState.current_language == "es",
-                                        "Nombre:",
-                                        "Name:"
-                                    ), 
-                                    font_weight="bold", 
-                                    width="150px", 
-                                    color_scheme="gray"
-                                ),
+                                rx.text("Nombre:", font_weight="bold", width="150px", color_scheme="gray"),
                                 rx.text("felipe", color="var(--gray-12)"),  # gray-12 es un color oscuro que se adapta al tema
                                 width="100%",
                                 justify="start",
                             ),
                             # Nivel
                             rx.hstack(
-                                rx.text(
-                                    rx.cond(
-                                        AppState.current_language == "es",
-                                        "Nivel:",
-                                        "Level:"
-                                    ), 
-                                    font_weight="bold", 
-                                    width="150px", 
-                                    color_scheme="gray"
-                                ),
-                                rx.text(
-                                    rx.cond(
-                                        AppState.current_language == "es",
-                                        "Estudiante Avanzado",
-                                        "Advanced Student"
-                                    ),
-                                    color="var(--gray-12)"
-                                ),
+                                rx.text("Nivel:", font_weight="bold", width="150px", color_scheme="gray"),
+                                rx.text("Estudiante Avanzado", color="var(--gray-12)"),
                                 width="100%",
                                 justify="start",
                             ),
                             # Curso Activo
                             rx.hstack(
-                                rx.text(
-                                    rx.cond(
-                                        AppState.current_language == "es",
-                                        "Curso Activo:",
-                                        "Active Course:"
-                                    ), 
-                                    font_weight="bold", 
-                                    width="150px", 
-                                    color_scheme="gray"
-                                ),
+                                rx.text("Curso Activo:", font_weight="bold", width="150px", color_scheme="gray"),
                                 rx.text("8vo Básico", color="var(--gray-12)"),
                                 width="100%",
                                 justify="start",
@@ -1850,16 +1729,7 @@ def perfil_tab():
                             
                             # Asignaturas
                             rx.hstack(
-                                rx.text(
-                                    rx.cond(
-                                        AppState.current_language == "es",
-                                        "Asignaturas:",
-                                        "Subjects:"
-                                    ), 
-                                    font_weight="bold", 
-                                    width="150px", 
-                                    color_scheme="gray"
-                                ),
+                                rx.text("Asignaturas:", font_weight="bold", width="150px", color_scheme="gray"),
                                 rx.hstack(
                                     rx.badge("MAT", color_scheme="blue"),
                                     rx.badge("CIEN", color_scheme="green"),
@@ -1874,16 +1744,7 @@ def perfil_tab():
                                 align_items="center",
                             ),                            # Evaluaciones Completadas
                             rx.hstack(
-                                rx.text(
-                                    rx.cond(
-                                        AppState.current_language == "es",
-                                        "Evaluaciones Completadas:",
-                                        "Completed Assessments:"
-                                    ), 
-                                    font_weight="bold", 
-                                    width="150px", 
-                                    color_scheme="gray"
-                                ),
+                                rx.text("Evaluaciones Completadas:", font_weight="bold", width="150px", color_scheme="gray"),
                                 rx.text(AppState.stats_history.length(), color="var(--gray-12)"),
                                 width="100%",
                                 justify="start",
@@ -1903,21 +1764,13 @@ def perfil_tab():
                 rx.hstack(
                     rx.button(
                         rx.icon("user-cog", mr="0.2em"),
-                        rx.cond(
-                            AppState.current_language == "es",
-                            "Cambiar Contraseña",
-                            "Change Password"
-                        ),
+                        "Cambiar Contraseña",
                         variant="soft",
                         size="2",
                         color_scheme=PRIMARY_COLOR_SCHEME,
                     ),                    rx.button(
                         rx.icon("download", mr="0.2em"),
-                        rx.cond(
-                            AppState.current_language == "es",
-                            "Descargar Historial",
-                            "Download History"
-                        ),
+                        "Descargar Historial",
                         variant="soft",
                         size="2",
                         color_scheme=ACCENT_COLOR_SCHEME,
@@ -1925,11 +1778,7 @@ def perfil_tab():
                     ),
                     rx.button(
                         rx.icon("trash", mr="0.2em"),
-                        rx.cond(
-                            AppState.current_language == "es",
-                            "Borrar Historial",
-                            "Delete History"
-                        ),
+                        "Borrar Historial",
                         variant="soft",
                         size="2",
                         color_scheme="red",
@@ -1952,23 +1801,22 @@ def perfil_tab():
         
         # Tarjeta de estadísticas con estilo horizontal y colores distintos
         rx.card(
-            rx.vstack(
-                rx.center(
-                    rx.hstack(
-                        rx.icon("bar-chart", color="#4F46E5"),
-                        rx.heading(
-                            rx.cond(
-                                AppState.current_language == "es",
-                                "📊 Estadísticas de Aprendizaje", 
-                                "📊 Learning Statistics"
-                            ), 
-                            size="5", 
-                            color="var(--gray-12)"
+            rx.vstack(                    rx.center(
+                        rx.hstack(
+                            rx.icon("bar-chart", color="#4F46E5"),
+                            rx.heading(
+                                rx.cond(
+                                    AppState.current_language == "es",
+                                    "📊 Estadísticas de Aprendizaje", 
+                                    "📊 Learning Statistics"
+                                ), 
+                                size="5", 
+                                color="var(--gray-12)"
+                            ),
+                            spacing="2",
                         ),
-                        spacing="2",
+                        width="100%"
                     ),
-                    width="100%"
-                ),
                 
                 # MODIFICADO: Progreso por materia - Barras de progreso alineadas
                 rx.vstack(
@@ -2021,15 +1869,7 @@ def perfil_tab():
                         # Ciencias - Con ancho fijo para el texto
                         rx.hstack(
                             rx.box(
-                                rx.text(
-                                    rx.cond(
-                                        AppState.current_language == "es",
-                                        "Ciencias",
-                                        "Sciences"
-                                    ), 
-                                    align_self="center", 
-                                    color="var(--gray-12)"
-                                ),
+                                rx.text("Ciencias", align_self="center", color="var(--gray-12)"),
                                 width="150px", 
                                 min_width="150px",
                             ),
@@ -2051,15 +1891,7 @@ def perfil_tab():
                         # Historia - Con ancho fijo para el texto
                         rx.hstack(
                             rx.box(
-                                rx.text(
-                                    rx.cond(
-                                        AppState.current_language == "es",
-                                        "Historia",
-                                        "History"
-                                    ), 
-                                    align_self="center", 
-                                    color="var(--gray-12)"
-                                ),
+                                rx.text("Historia", align_self="center", color="var(--gray-12)"),
                                 width="150px", 
                                 min_width="150px",
                             ),
@@ -2081,15 +1913,7 @@ def perfil_tab():
                         # Lenguaje - Con ancho fijo para el texto
                         rx.hstack(
                             rx.box(
-                                rx.text(
-                                    rx.cond(
-                                        AppState.current_language == "es",
-                                        "Lenguaje",
-                                        "Language"
-                                    ), 
-                                    align_self="center", 
-                                    color="var(--gray-12)"
-                                ),
+                                rx.text("Lenguaje", align_self="center", color="var(--gray-12)"),
                                 width="150px", 
                                 min_width="150px",
                             ),
@@ -2124,26 +1948,8 @@ def perfil_tab():
                     rx.box(
                         rx.vstack(
                             rx.heading(AppState.stats_history.length(), size="3", color="white", font_size="2em", mb="0"),
-                            rx.text(
-                                rx.cond(
-                                    AppState.current_language == "es",
-                                    "Evaluaciones",
-                                    "Assessments"
-                                ), 
-                                font_size="sm", 
-                                color="white", 
-                                text_align="center"
-                            ),
-                            rx.text(
-                                rx.cond(
-                                    AppState.current_language == "es",
-                                    "Completadas",
-                                    "Completed"
-                                ), 
-                                font_size="sm", 
-                                color="white", 
-                                text_align="center"
-                            ),
+                            rx.text("Evaluaciones", font_size="sm", color="white", text_align="center"),
+                            rx.text("Completadas", font_size="sm", color="white", text_align="center"),
                             align_items="center",
                             justify_content="center",
                             width="100%",
@@ -2159,26 +1965,8 @@ def perfil_tab():
                     rx.box(
                         rx.vstack(
                             rx.heading(f"{AppState.promedio_calificaciones}%", size="3", color="white", font_size="2em", mb="0"),
-                            rx.text(
-                                rx.cond(
-                                    AppState.current_language == "es",
-                                    "Promedio",
-                                    "Average"
-                                ), 
-                                font_size="sm", 
-                                color="white", 
-                                text_align="center"
-                            ),
-                            rx.text(
-                                rx.cond(
-                                    AppState.current_language == "es",
-                                    "Puntuación",
-                                    "Score"
-                                ), 
-                                font_size="sm", 
-                                color="white", 
-                                text_align="center"
-                            ),
+                            rx.text("Promedio", font_size="sm", color="white", text_align="center"),
+                            rx.text("Puntuación", font_size="sm", color="white", text_align="center"),
                             align_items="center",
                             justify_content="center",
                             width="100%",
@@ -2195,26 +1983,8 @@ def perfil_tab():
                     rx.box(
                         rx.vstack(
                             rx.heading(AppState.contar_mapas_creados, size="3", color="white", font_size="2em", mb="0"),
-                            rx.text(
-                                rx.cond(
-                                    AppState.current_language == "es",
-                                    "Mapas",
-                                    "Maps"
-                                ), 
-                                font_size="sm", 
-                                color="white", 
-                                text_align="center"
-                            ),
-                            rx.text(
-                                rx.cond(
-                                    AppState.current_language == "es",
-                                    "Creados",
-                                    "Created"
-                                ), 
-                                font_size="sm", 
-                                color="white", 
-                                text_align="center"
-                            ),
+                            rx.text("Mapas", font_size="sm", color="white", text_align="center"),
+                            rx.text("Creados", font_size="sm", color="white", text_align="center"),
                             align_items="center",
                             justify_content="center",
                             width="100%",
@@ -2231,26 +2001,8 @@ def perfil_tab():
                     rx.box(
                         rx.vstack(
                             rx.heading(AppState.contar_resumenes_generados, size="3", color="white", font_size="2em", mb="0"),
-                            rx.text(
-                                rx.cond(
-                                    AppState.current_language == "es",
-                                    "Resúmenes",
-                                    "Summaries"
-                                ), 
-                                font_size="sm", 
-                                color="white", 
-                                text_align="center"
-                            ),
-                            rx.text(
-                                rx.cond(
-                                    AppState.current_language == "es",
-                                    "Generados",
-                                    "Generated"
-                                ), 
-                                font_size="sm", 
-                                color="white", 
-                                text_align="center"
-                            ),
+                            rx.text("Resúmenes", font_size="sm", color="white", text_align="center"),
+                            rx.text("Generados", font_size="sm", color="white", text_align="center"),
                             align_items="center",
                             justify_content="center",
                             width="100%",
@@ -2284,22 +2036,9 @@ def perfil_tab():
             rx.vstack(
                 rx.center(
                     rx.vstack(
-                        rx.heading(
-                            rx.cond(
-                                AppState.current_language == "es",
-                                "📚 Historial de Evaluaciones",
-                                "📚 Assessment History"
-                            ),
-                            size="4", 
-                            mb="1em", 
-                            color="var(--gray-12)"
-                        ),
+                        rx.heading("📚 Historial de Evaluaciones", size="4", mb="1em", color="var(--gray-12)"),
                         rx.text(
-                            rx.cond(
-                                AppState.current_language == "es",
-                                "¡Mira tu progreso! Cada evaluación te hace más fuerte 💪",
-                                "Check your progress! Each assessment makes you stronger 💪"
-                            ),
+                            "¡Mira tu progreso! Cada evaluación te hace más fuerte 💪",
                             color="var(--gray-9)",
                             mb="2em",
                             text_align="center",
@@ -2313,69 +2052,17 @@ def perfil_tab():
                     rx.vstack(
                         # Encabezado de la tabla
                         rx.hstack(
-                            rx.text(
-                                rx.cond(
-                                    AppState.current_language == "es",
-                                    "📅 Fecha",
-                                    "📅 Date"
-                                ), 
-                                font_weight="bold", 
-                                width="20%", 
-                                text_align="center", 
-                                white_space="nowrap", 
-                                color="var(--gray-12)"
-                            ),
-                            rx.text(
-                                rx.cond(
-                                    AppState.current_language == "es",
-                                    "📖 Libro",
-                                    "📖 Book"
-                                ), 
-                                font_weight="bold", 
-                                width="25%", 
-                                text_align="center", 
-                                white_space="nowrap", 
-                                color="var(--gray-12)"
-                            ),
-                            rx.text(
-                                rx.cond(
-                                    AppState.current_language == "es",
-                                    "📝 Tema",
-                                    "📝 Topic"
-                                ), 
-                                font_weight="bold", 
-                                width="25%", 
-                                text_align="center", 
-                                white_space="nowrap", 
-                                color="var(--gray-12)"
-                            ),
-                            rx.box(
-                                rx.text(
-                                    rx.cond(
-                                        AppState.current_language == "es",
-                                        "📝 Nota",
-                                        "📝 Score"
-                                    ),
-                                    font_weight="bold", 
-                                    white_space="nowrap", 
-                                    color="var(--gray-12)"
-                                ),
+                            rx.text("📅 Fecha", font_weight="bold", width="20%", text_align="center", white_space="nowrap", color="var(--gray-12)"),
+                            rx.text("📖 Libro", font_weight="bold", width="25%", text_align="center", white_space="nowrap", color="var(--gray-12)"),
+                            rx.text("📝 Tema", font_weight="bold", width="25%", text_align="center", white_space="nowrap", color="var(--gray-12)"),                            rx.box(
+                                rx.text("📝 Nota", font_weight="bold", white_space="nowrap", color="var(--gray-12)"),
                                 width="15%",
                                 display="flex",
                                 justify_content="center",
                                 padding_right="1em",
                             ),
                             rx.box(
-                                rx.text(
-                                    rx.cond(
-                                        AppState.current_language == "es",
-                                        "🏅 Pts",
-                                        "🏅 Pts"
-                                    ), 
-                                    font_weight="bold", 
-                                    white_space="nowrap", 
-                                    color="var(--gray-12)"
-                                ),
+                                rx.text("🏅 Pts", font_weight="bold", white_space="nowrap", color="var(--gray-12)"),
                                 width="10%",
                                 display="flex",
                                 justify_content="center",
@@ -2413,11 +2100,7 @@ def perfil_tab():
                                     padding_right="1em",
                                 ),rx.box(
                                     rx.button(
-                                        rx.cond(
-                                            AppState.current_language == "es",
-                                            "Repasar",
-                                            "Review"
-                                        ),
+                                        "Repasar",
                                         color_scheme="blue",
                                         size="2",
                                         on_click=lambda curso=evaluacion.get("curso", ""), libro=evaluacion.get("libro", ""), tema=evaluacion.get("tema", ""): AppState.repasar_evaluacion_y_ir(curso, libro, tema),
@@ -2437,16 +2120,7 @@ def perfil_tab():
                         rx.box(
                             rx.hstack(
                                 rx.button(
-                                    rx.hstack(
-                                        rx.icon("arrow-left", size=14), 
-                                        rx.text(
-                                            rx.cond(
-                                                AppState.current_language == "es",
-                                                "Anterior",
-                                                "Previous"
-                                            )
-                                        )
-                                    ),
+                                    rx.hstack(rx.icon("arrow-left", size=14), rx.text("Anterior")),
                                     on_click=AppState.pagina_anterior, 
                                     is_disabled=~AppState.tiene_pagina_anterior,
                                     variant="soft",
@@ -2455,32 +2129,15 @@ def perfil_tab():
                                 ),                                rx.text(
                                     rx.cond(
                                         AppState.total_paginas_historial > 1,
-                                        rx.cond(
-                                            AppState.current_language == "es",
-                                            f"Página {AppState.historial_evaluaciones_pagina_actual}/{AppState.total_paginas_historial}",
-                                            f"Page {AppState.historial_evaluaciones_pagina_actual}/{AppState.total_paginas_historial}"
-                                        ),
-                                        rx.cond(
-                                            AppState.current_language == "es",
-                                            f"Página {AppState.historial_evaluaciones_pagina_actual}",
-                                            f"Page {AppState.historial_evaluaciones_pagina_actual}"
-                                        )
+                                        f"Página {AppState.historial_evaluaciones_pagina_actual}/{AppState.total_paginas_historial}",
+                                        f"Página {AppState.historial_evaluaciones_pagina_actual}"
                                     ),
                                     font_weight="medium",
                                     padding="0 1em",
                                     color="var(--gray-12)",  # Color del texto adaptado al tema
                                 ),
                                 rx.button(
-                                    rx.hstack(
-                                        rx.text(
-                                            rx.cond(
-                                                AppState.current_language == "es",
-                                                "Siguiente",
-                                                "Next"
-                                            )
-                                        ), 
-                                        rx.icon("arrow-right", size=14)
-                                    ),
+                                    rx.hstack(rx.text("Siguiente"), rx.icon("arrow-right", size=14)),
                                     on_click=AppState.pagina_siguiente, 
                                     is_disabled=~AppState.tiene_siguiente_pagina,
                                     variant="soft",
