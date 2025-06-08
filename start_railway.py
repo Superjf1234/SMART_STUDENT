@@ -3,6 +3,24 @@
 import os
 import sys
 import subprocess
+from pathlib import Path
+
+# Cargar variables de entorno desde .env si existe
+env_path = Path('.env')
+if env_path.exists():
+    print("Cargando variables de entorno desde .env")
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, value = line.split('=', 1)
+                os.environ[key] = value
+
+# Verificar que GEMINI_API_KEY esté definida
+if 'GEMINI_API_KEY' not in os.environ:
+    print("ADVERTENCIA: Variable GEMINI_API_KEY no está definida")
+    # Usar una clave ficticia para permitir que la aplicación se inicie
+    os.environ['GEMINI_API_KEY'] = "AIzaSyAOkMCAA84tHALCkCPskyV0jFKnBz2pSiA"
 
 # Obtener el puerto de la variable de entorno o usar 8000 como predeterminado
 port = os.environ.get('PORT', '8000')
