@@ -1178,10 +1178,9 @@ def inicio_tab():
         align_items="center",
         padding="1em",
         margin_top="1em",
-    )
-
 def resumen_tab():
-    """Contenido de la pestaña de resúmenes."""    return rx.vstack(
+    """Contenido de la pestaña de resúmenes."""
+    return rx.vstack(
         # Encabezado con robot
         rx.center(
             rx.hstack(
