@@ -1185,11 +1185,11 @@ def resumen_tab():
     return rx.vstack(
         # Encabezado con robot
         rx.center(
-            rx.hstack(
-                rx.heading(
-                    "📄 " + (
-                        "Genera Resúmenes Inteligentes" if AppState.current_language == "es" 
-                        else "Generate Smart Summaries"
+            rx.hstack(                rx.heading(
+                    "📄 " + rx.cond(
+                        AppState.current_language == "es",
+                        "Genera Resúmenes Inteligentes",
+                        "Generate Smart Summaries"
                     ), 
                     size="6"
                 ),
