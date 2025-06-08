@@ -39,4 +39,4 @@ ENV PYTHONPATH=/app
 ENV REFLEX_ENV=production
 
 # Comando para ejecutar la aplicación
-CMD ["bash", "start_railway.sh"]
+CMD ["python", "start_railway.py"]
