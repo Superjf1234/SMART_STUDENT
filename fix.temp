@@ -1,0 +1,3 @@
+def resumen_tab():
+    """Contenido de la pestaña de resúmenes."""
+    return rx.vstack(
