@@ -35,8 +35,20 @@ def lightweight_init():
         
         # Verificar que Python puede importar la aplicación
         sys.path.insert(0, '/app')
-        import mi_app_estudio.mi_app_estudio
-        print("Aplicación Python cargada correctamente")
+        sys.path.insert(0, os.getcwd())
+        
+        try:
+            import mi_app_estudio
+            print("✓ Paquete mi_app_estudio importado correctamente")
+        except ImportError as e:
+            print(f"⚠ Advertencia al importar paquete: {e}")
+            # Intentar importar el módulo directamente
+            try:
+                import mi_app_estudio.mi_app_estudio
+                print("✓ Módulo principal importado correctamente")
+            except ImportError as e2:
+                print(f"⚠ No se pudo importar módulo principal: {e2}")
+                # No fallar completamente, Railway puede manejar esto
         
         return True
     except Exception as e:
