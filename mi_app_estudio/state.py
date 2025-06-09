@@ -2558,6 +2558,11 @@ class AppState(rx.State):
 
             if not pdf_generado:
                 print("DEBUG: Generando fallback HTML...")
+                # Pre-process content to avoid backslashes in f-string
+                resumen_html = self.resumen_content.replace('\n', '<br>')
+                puntos_html = self.puntos_content.replace('\n', '<br>') if self.puntos_content else ''
+                puntos_section = f'<h2>Puntos Clave:</h2><div class="puntos">{puntos_html}</div>' if self.puntos_content and self.include_puntos else ''
+                
                 html_content = f"""<!DOCTYPE html>
                 <html lang="es">
                 <head>
@@ -2577,10 +2582,10 @@ class AppState(rx.State):
                     <h3>Curso: {self.selected_curso} - Libro: {self.selected_libro}</h3>
                     <hr>
                     <div class="resumen">
-                        {self.resumen_content.replace('\n', '<br>')}
+                        {resumen_html}
                     </div>
                     
-                    {f'<h2>Puntos Clave:</h2><div class="puntos">{self.puntos_content.replace("\n", "<br>")}</div>' if self.puntos_content and self.include_puntos else ''}
+                    {puntos_section}
                     
                     <hr>
                     <footer>
