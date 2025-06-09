@@ -269,22 +269,22 @@ def vista_pregunta_activa():
                                             width="100%",
                                             align_items="center",
                                         )
-                                    ),
-                                    # Mostrar resultado en modo revisión
+                                    ),                                    # Mostrar resultado en modo revisión
                                     rx.cond(
                                         EvaluationState.is_reviewing_eval,
-                                        rx.box(                                            rx.vstack(
+                                        rx.box(
+                                            rx.vstack(
                                                 rx.hstack(
                                                     rx.cond(
-                                                EvaluationState.is_current_question_correct_in_review,
-                                                rx.icon(
-                                                    "check",
-                                                    color="green.500", 
-                                                    size=18
-                                                ),
-                                                rx.icon(
-                                                    "x",
-                                                    color="red.500", 
+                                                        EvaluationState.is_current_question_correct_in_review,
+                                                        rx.icon(
+                                                            "check",
+                                                            color="green.500", 
+                                                            size=18
+                                                        ),
+                                                        rx.icon(
+                                                            "x",
+                                                            color="red.500",
                                                     size=18
                                                 )
                                             ),
