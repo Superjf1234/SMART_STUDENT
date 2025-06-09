@@ -1,0 +1,36 @@
+[flake8]
+# Configuración para ignorar errores de librerías externas
+exclude = 
+    .venv,
+    venv,
+    __pycache__,
+    .git,
+    node_modules,
+    .pytest_cache
+
+# Ignorar algunos errores específicos que son falsos positivos
+ignore = 
+    # Líneas demasiado largas (common en código generado)
+    E501,
+    # Espacios en blanco al final de línea
+    W291,
+    W293,
+    # Líneas en blanco al final del archivo
+    W391,
+    # Imports no utilizados en __init__.py
+    F401
+
+# Longitud máxima de línea
+max-line-length = 120
+
+# Archivos a incluir (solo nuestro código)
+include = 
+    mi_app_estudio/*.py,
+    backend/*.py,
+    *.py
+
+per-file-ignores =
+    # Permitir imports no utilizados en archivos __init__.py
+    __init__.py:F401
+    # Permitir variables globales no asignadas en ciertos archivos
+    mi_app_estudio.py:F824

@@ -665,7 +665,7 @@ class AppState(rx.State):
                             evaluacion["total_preguntas"] = int(total)
                             print(f"DEBUG: Extraídas respuestas_correctas={correctas}/{total} de metadata")
                 except Exception as e:
-                    print(f"ERROR: No se pudo extraer metadata {evaluacion.get("metadata")}: {e}")
+                    print(f"ERROR: No se pudo extraer metadata {evaluacion.get('metadata')}: {e}")
             
             # Asegurarse que tenemos campos consistentes (algunos pueden venir como calificacion, otros como nota)
             if "calificacion" not in evaluacion and "puntuacion" in evaluacion:

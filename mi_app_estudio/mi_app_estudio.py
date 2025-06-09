@@ -967,8 +967,7 @@ def login_page():
                         align_items="center",
                     ),
                     spacing="3",
-                    align_items="center",
-                    justify="center",
+                    align_items="center",                    justify="center",
                     margin_bottom="1em",
                     width="100%",
                 ),
@@ -1037,25 +1036,19 @@ def login_page():
                         width="100%",
                     ),
                     on_submit=AppState.handle_login,
-                    reset_on_submit=False,
-                ),
-                width="400px",
-                max_width="90%",
+                    reset_on_submit=False,                ),
+                width="400px",                max_width="90%",
             ),
             spacing="4",
             width="100%",
             height="100vh",
             padding="2em",
             align="center",
-            justify="center",
-        ),
-        width="100%",
+            justify="center",        ),  # Cierre de rx.center        width="100%",
         height="100%",
-    ),
-    width="100%",
-    height="100%",
-    position="relative",
-    )
+        position="relative",
+    )  # Cierre de rx.box
+)  # Cierre de return rx.box(
 
 def inicio_tab():
     """Contenido de la pestaña de inicio."""
@@ -1141,17 +1134,16 @@ def inicio_tab():
                 rx.vstack(
                     rx.heading(
                         AppState.popular_resources_text, size="5", mb="1em", text_align="center", color="var(--gray-12)"
-                    ),
-                    rx.hstack(
+                    ),                    rx.hstack(
                         rx.foreach(
                             [AppState.mathematics_text, AppState.science_text, AppState.history_text, AppState.language_text],
-                    lambda c: rx.cond(
-                        AppState.cursos_list.contains(c),
-                        rx.button(
-                            c,
-                            # --- CORRECCIÓN AQUÍ ---
-                            # Pasamos la referencia al método y el argumento capturado 'c'
-                            on_click=lambda curso=c: AppState.go_to_curso_and_resumen(curso),
+                            lambda c: rx.cond(
+                                AppState.cursos_list.contains(c),
+                                rx.button(
+                                    c,
+                                    # --- CORRECCIÓN AQUÍ ---
+                                    # Pasamos la referencia al método y el argumento capturado 'c'
+                                    on_click=lambda curso=c: AppState.go_to_curso_and_resumen(curso),
                                     variant="soft",
                                     color_scheme=PRIMARY_COLOR_SCHEME,
                                     size="3",
@@ -1172,14 +1164,18 @@ def inicio_tab():
                 max_width="800px",
                 margin_top="2em",
             )
-        ),
-        width="100%",
+        ),        width="100%",
         spacing="4",
         align_items="center",
         padding="1em",
         margin_top="1em",
+    )
+
 def resumen_tab():
-    """Contenido de la pestaña de resúmenes."""
+    """
+    Contenido de la pestaña de resúmenes.
+    """
+    
     return rx.vstack(
         # Encabezado con robot
         rx.center(
