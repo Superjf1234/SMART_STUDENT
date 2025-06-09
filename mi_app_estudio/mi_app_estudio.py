@@ -2216,7 +2216,7 @@ def ayuda_tab():
                         # Pregunta clickeable para mostrar/ocultar respuesta
                         rx.box(
                             rx.hstack(
-                                rx.icon("question-mark", size=16, color="var(--gray-12)"),
+                                rx.icon("help-circle", size=16, color="var(--gray-12)"),
                                 rx.text(pregunta["pregunta"], font_weight="medium"),
                                 rx.spacer(),
                                 rx.icon(
