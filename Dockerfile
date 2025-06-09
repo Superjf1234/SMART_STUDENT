@@ -1,4 +1,4 @@
-# Dockerfile para aplicación SMART_STUDENT Reflex
+# Dockerfile optimizado para Railway - aplicación SMART_STUDENT Reflex
 FROM python:3.12-slim
 
 # Establecer directorio de trabajo
@@ -10,16 +10,19 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     curl \
     unzip \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalar Chrome para Selenium (si es necesario)
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/*
+# Instalar Node.js LTS (más estable para Railway)
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs
 
-# Copiar archivos de requisitos
+# Instalar bun con configuración optimizada
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:$PATH"
+ENV BUN_INSTALL="/root/.bun"
+
+# Copiar archivos de requisitos primero para aprovechar caché de Docker
 COPY requirements.txt .
 
 # Instalar dependencias Python
@@ -28,15 +31,23 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar código de la aplicación
 COPY . .
 
-# Crear directorio para la base de datos
-RUN mkdir -p /app/data
+# Crear directorio para la base de datos y otros directorios necesarios
+RUN mkdir -p /app/data /app/.web
 
-# Exponer puertos
-EXPOSE 3000 8001
+# Exponer puerto que Railway espera
+EXPOSE 8080
 
-# Variables de entorno
+# Variables de entorno optimizadas para Railway
 ENV PYTHONPATH=/app
-ENV REFLEX_ENV=production
+ENV REFLEX_ENV=prod
+ENV PORT=8080
+ENV NODE_OPTIONS="--max-old-space-size=256"
+ENV BUN_CONFIG_NO_CLEAR_TERMINAL=true
+ENV PYTHONUNBUFFERED=1
+
+# Comando de healthcheck para Railway
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python railway_healthcheck.py || exit 1
 
 # Comando para ejecutar la aplicación
 CMD ["python", "start_railway.py"]
