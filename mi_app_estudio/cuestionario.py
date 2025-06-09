@@ -307,7 +307,7 @@ def cuestionario_tab_content() -> rx.Component:
                     # Success message
                     rx.box(
                         rx.hstack(
-                            rx.icon("check-circle", color="green"),
+                            rx.icon("check", color="green"),
                             rx.text(CuestionarioState.cuestionario_message),
                             spacing="2",
                         ),

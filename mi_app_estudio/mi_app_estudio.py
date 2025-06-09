@@ -58,8 +58,7 @@ def vista_pregunta_activa():
                                 size="2",                                width="100%",
                                 # Usamos 'column' en lugar de 'vertical'
                                 direction="column", 
-                                spacing="3",  # Espaciado entre opciones
-                                is_disabled=EvaluationState.is_reviewing_eval,  # Deshabilitar en modo revisión
+                                spacing="3",  # Espaciado entre opciones                                is_disabled=EvaluationState.is_reviewing_eval,  # Deshabilitar en modo revisión
                             ),
                             # Mostrar resultado en modo revisión
                             rx.cond(
@@ -70,12 +69,12 @@ def vista_pregunta_activa():
                                             rx.cond(
                                                 EvaluationState.is_current_question_correct_in_review,
                                                 rx.icon(
-                                                    "check-circle",
+                                                    "check",
                                                     color="green.500", 
                                                     size=18
                                                 ),
                                                 rx.icon(
-                                                    "x-circle",
+                                                    "x",
                                                     color="red.500", 
                                                     size=18
                                                 )
@@ -149,8 +148,7 @@ def vista_pregunta_activa():
                                 rx.radio_group(
                                     # Definimos las opciones como una lista para radio_group
                                     EvaluationState.get_current_question_options_texts,
-                                    value=EvaluationState.current_radio_group_value,
-                                    on_change=lambda value: EvaluationState.set_eval_answer_by_text(value),
+                                    value=EvaluationState.current_radio_group_value,                                    on_change=lambda value: EvaluationState.set_eval_answer_by_text(value),
                                     size="2",
                                     width="100%",
                                     direction="column",
@@ -166,12 +164,12 @@ def vista_pregunta_activa():
                                                 rx.cond(
                                                 EvaluationState.is_current_question_correct_in_review,
                                                 rx.icon(
-                                                    "check-circle",
+                                                    "check",
                                                     color="green.500", 
                                                     size=18
                                                 ),
                                                 rx.icon(
-                                                    "x-circle",
+                                                    "x",
                                                     color="red.500", 
                                                     size=18
                                                 )
@@ -275,18 +273,17 @@ def vista_pregunta_activa():
                                     # Mostrar resultado en modo revisión
                                     rx.cond(
                                         EvaluationState.is_reviewing_eval,
-                                        rx.box(
-                                            rx.vstack(
+                                        rx.box(                                            rx.vstack(
                                                 rx.hstack(
                                                     rx.cond(
                                                 EvaluationState.is_current_question_correct_in_review,
                                                 rx.icon(
-                                                    "check-circle",
+                                                    "check",
                                                     color="green.500", 
                                                     size=18
                                                 ),
                                                 rx.icon(
-                                                    "x-circle",
+                                                    "x",
                                                     color="red.500", 
                                                     size=18
                                                 )
