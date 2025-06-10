@@ -15,6 +15,8 @@
 - 👤 **Gestión de Usuarios**: Sistema de autenticación y perfiles
 - 📊 **Seguimiento de Progreso**: Estadísticas detalladas del aprendizaje
 - 🌐 **Interfaz Bilingüe**: Soporte para español e inglés
+- 🔧 **Gestión Automática de Puertos**: Scripts inteligentes para resolver conflictos
+- 🚀 **Inicio Rápido**: Sistema de deployment optimizado para Railway
 
 ## 🛠️ Tecnologías Utilizadas
 
@@ -49,6 +51,12 @@ pip install -r requirements.txt
 cp .env.example .env
 # Editar .env con tus claves API
 
+# Ejecutar la aplicación (MÉTODO RECOMENDADO)
+python final_port_fix.py
+
+# O método alternativo
+python -m reflex run
+
 # Ejecutar la aplicación
 python -m reflex run
 ```
@@ -62,6 +70,43 @@ docker build -t smart-student .
 # Ejecutar contenedor
 docker run -p 3000:3000 -p 8001:8001 smart-student
 ```
+
+## 🔧 Solución de Problemas de Puertos
+
+Si encuentras el error `Address already in use`, tenemos scripts automáticos para solucionarlo:
+
+### Método 1: Script Automático (RECOMENDADO)
+```bash
+python final_port_fix.py
+```
+Este script:
+- 🔍 Detecta automáticamente puertos libres
+- 🧹 Limpia procesos conflictivos
+- 🚀 Inicia la aplicación con configuración óptima
+
+### Método 2: Limpieza Manual
+```bash
+# Limpiar puerto específico
+python clean_port.py 8080
+
+# Limpieza agresiva de todos los puertos problemáticos
+python aggressive_cleanup.py
+
+# Luego ejecutar Reflex
+python -m reflex run
+```
+
+### Método 3: Puertos Específicos
+```bash
+python -m reflex run --backend-port 8081 --frontend-port 3001
+```
+
+### Scripts Disponibles
+- `final_port_fix.py` - Solución principal automatizada
+- `aggressive_cleanup.py` - Limpieza robusta de procesos
+- `clean_port.py` - Limpieza de puerto específico
+- `start_reflex_clean.py` - Inicio con limpieza automática
+- `start_reflex_smart.py` - Búsqueda inteligente de puertos
 
 ## 🚀 Deployment
 
