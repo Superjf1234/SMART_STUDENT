@@ -114,11 +114,26 @@ def fallback_basic_server():
         
         class SimpleHandler(BaseHTTPRequestHandler):
             def do_GET(self):
-                self.send_response(200)
-                self.send_header('Content-type', 'text/html')
-                self.end_headers()
-                
-                html = """
+                # Healthcheck endpoint para Railway
+                if self.path == '/health' or self.path == '/':
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    
+                    health_response = {
+                        "status": "healthy",
+                        "service": "smart_student",
+                        "mode": "development",
+                        "timestamp": str(__import__('datetime').datetime.now())
+                    }
+                    self.wfile.write(__import__('json').dumps(health_response).encode())
+                else:
+                    # Página principal
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/html')
+                    self.end_headers()
+                    
+                    html = """
 <!DOCTYPE html>
 <html>
 <head>

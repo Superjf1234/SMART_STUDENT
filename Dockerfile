@@ -37,13 +37,19 @@ RUN mkdir -p /app/data /app/.web
 # Exponer puerto que Railway espera
 EXPOSE 8080
 
-# Variables de entorno optimizadas para Railway
+# Variables de entorno optimizadas para Railway (MODO DESARROLLO FORZADO)
 ENV PYTHONPATH=/app:/app/mi_app_estudio
-ENV REFLEX_ENV=prod
+ENV REFLEX_ENV=dev
+ENV REFLEX_DEBUG=false
+ENV REFLEX_DISABLE_TELEMETRY=true
+ENV REFLEX_SKIP_COMPILE=true
+ENV REFLEX_NO_BUILD=true
 ENV PORT=8080
-ENV NODE_OPTIONS="--max-old-space-size=256"
+ENV NODE_OPTIONS="--max-old-space-size=64"
 ENV BUN_CONFIG_NO_CLEAR_TERMINAL=true
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV NEXT_TELEMETRY_DISABLED=1
 
 # Comando para ejecutar la aplicación (Railway usará Procfile si existe)
-CMD ["python", "ultra_simple_start.py"]
+CMD ["python", "railway_ultra_direct.py"]
