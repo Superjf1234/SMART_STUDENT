@@ -58,7 +58,8 @@ def vista_pregunta_activa():
                                 size="2",                                width="100%",
                                 # Usamos 'column' en lugar de 'vertical'
                                 direction="column", 
-                                spacing="3",  # Espaciado entre opciones                                is_disabled=EvaluationState.is_reviewing_eval,  # Deshabilitar en modo revisión
+                                spacing="3",  # Espaciado entre opciones
+                                is_disabled=EvaluationState.is_reviewing_eval,  # Deshabilitar en modo revisión
                             ),
                             # Mostrar resultado en modo revisión
                             rx.cond(
@@ -69,12 +70,12 @@ def vista_pregunta_activa():
                                             rx.cond(
                                                 EvaluationState.is_current_question_correct_in_review,
                                                 rx.icon(
-                                                    "check",
+                                                    "check-circle",
                                                     color="green.500", 
                                                     size=18
                                                 ),
                                                 rx.icon(
-                                                    "x",
+                                                    "x-circle",
                                                     color="red.500", 
                                                     size=18
                                                 )
@@ -148,7 +149,8 @@ def vista_pregunta_activa():
                                 rx.radio_group(
                                     # Definimos las opciones como una lista para radio_group
                                     EvaluationState.get_current_question_options_texts,
-                                    value=EvaluationState.current_radio_group_value,                                    on_change=lambda value: EvaluationState.set_eval_answer_by_text(value),
+                                    value=EvaluationState.current_radio_group_value,
+                                    on_change=lambda value: EvaluationState.set_eval_answer_by_text(value),
                                     size="2",
                                     width="100%",
                                     direction="column",
@@ -164,12 +166,12 @@ def vista_pregunta_activa():
                                                 rx.cond(
                                                 EvaluationState.is_current_question_correct_in_review,
                                                 rx.icon(
-                                                    "check",
+                                                    "check-circle",
                                                     color="green.500", 
                                                     size=18
                                                 ),
                                                 rx.icon(
-                                                    "x",
+                                                    "x-circle",
                                                     color="red.500", 
                                                     size=18
                                                 )
@@ -269,22 +271,23 @@ def vista_pregunta_activa():
                                             width="100%",
                                             align_items="center",
                                         )
-                                    ),                                    # Mostrar resultado en modo revisión
+                                    ),
+                                    # Mostrar resultado en modo revisión
                                     rx.cond(
                                         EvaluationState.is_reviewing_eval,
                                         rx.box(
                                             rx.vstack(
                                                 rx.hstack(
                                                     rx.cond(
-                                                        EvaluationState.is_current_question_correct_in_review,
-                                                        rx.icon(
-                                                            "check",
-                                                            color="green.500", 
-                                                            size=18
-                                                        ),
-                                                        rx.icon(
-                                                            "x",
-                                                            color="red.500",
+                                                EvaluationState.is_current_question_correct_in_review,
+                                                rx.icon(
+                                                    "check-circle",
+                                                    color="green.500", 
+                                                    size=18
+                                                ),
+                                                rx.icon(
+                                                    "x-circle",
+                                                    color="red.500", 
                                                     size=18
                                                 )
                                             ),
@@ -964,7 +967,8 @@ def login_page():
                         align_items="center",
                     ),
                     spacing="3",
-                    align_items="center",                    justify="center",
+                    align_items="center",
+                    justify="center",
                     margin_bottom="1em",
                     width="100%",
                 ),
@@ -1030,22 +1034,24 @@ def login_page():
                         ),
                         spacing="4",
                         padding="1.5em",
-                        width="100%",
-                    ),
+                        width="100%",                    ),
                     on_submit=AppState.handle_login,
-                    reset_on_submit=False,                ),
-                width="400px",                max_width="90%",
+                    reset_on_submit=False,
+                ),                width="400px",
+                max_width="90%",
             ),
-            spacing="4",
-            width="100%",
-            height="100vh",
-            padding="2em",
-            align="center",
-            justify="center",        ),  # Cierre de rx.center        width="100%",
+        ),  # <- Cierre de rx.vstack
+        spacing="4",
+        width="100%",
+        height="100vh",
+        padding="2em",
+        align="center",
+        justify="center",
+        ),
+        width="100%",
         height="100%",
         position="relative",
-    )  # Cierre de rx.box
-)  # Cierre de return rx.box(
+    )
 
 def inicio_tab():
     """Contenido de la pestaña de inicio."""
@@ -1131,16 +1137,17 @@ def inicio_tab():
                 rx.vstack(
                     rx.heading(
                         AppState.popular_resources_text, size="5", mb="1em", text_align="center", color="var(--gray-12)"
-                    ),                    rx.hstack(
+                    ),
+                    rx.hstack(
                         rx.foreach(
                             [AppState.mathematics_text, AppState.science_text, AppState.history_text, AppState.language_text],
-                            lambda c: rx.cond(
-                                AppState.cursos_list.contains(c),
-                                rx.button(
-                                    c,
-                                    # --- CORRECCIÓN AQUÍ ---
-                                    # Pasamos la referencia al método y el argumento capturado 'c'
-                                    on_click=lambda curso=c: AppState.go_to_curso_and_resumen(curso),
+                    lambda c: rx.cond(
+                        AppState.cursos_list.contains(c),
+                        rx.button(
+                            c,
+                            # --- CORRECCIÓN AQUÍ ---
+                            # Pasamos la referencia al método y el argumento capturado 'c'
+                            on_click=lambda curso=c: AppState.go_to_curso_and_resumen(curso),
                                     variant="soft",
                                     color_scheme=PRIMARY_COLOR_SCHEME,
                                     size="3",
@@ -2212,10 +2219,11 @@ def ayuda_tab():
                 # Lista de preguntas con funcionalidad para mostrar/ocultar respuestas
                 rx.foreach(
                     AppState.ayuda_preguntas_respuestas,
-                    lambda pregunta, i: rx.vstack(                        # Pregunta clickeable para mostrar/ocultar respuesta
+                    lambda pregunta, i: rx.vstack(
+                        # Pregunta clickeable para mostrar/ocultar respuesta
                         rx.box(
                             rx.hstack(
-                                rx.icon("circle-help", size=16, color="var(--gray-12)"),
+                                rx.icon("question-mark", size=16, color="var(--gray-12)"),
                                 rx.text(pregunta["pregunta"], font_weight="medium"),
                                 rx.spacer(),
                                 rx.icon(
