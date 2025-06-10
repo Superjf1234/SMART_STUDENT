@@ -1,0 +1,23 @@
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "numReplicas": 1,
+    "restartPolicyType": "ON_FAILURE"
+  },
+  "environments": {
+    "production": {
+      "variables": {
+        "NODE_OPTIONS": "--max-old-space-size=128 --max-semi-space-size=2",
+        "PYTHONOPTIMIZE": "2",
+        "PYTHONHASHSEED": "0",
+        "WEB_CONCURRENCY": "1",
+        "REFLEX_WORKERS": "1",
+        "NEXT_TELEMETRY_DISABLED": "1",
+        "NODE_ENV": "production",
+        "REFLEX_ENV": "prod"
+      }
+    }
+  }
+}

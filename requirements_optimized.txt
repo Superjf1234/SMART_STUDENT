@@ -1,0 +1,11 @@
+# Dependencias mínimas optimizadas para Railway
+reflex>=0.3.6
+pypdf>=3.0.0
+passlib>=1.7.4
+bcrypt==3.2.2
+python-dotenv>=0.19.0
+requests>=2.31.0
+pillow>=11.0.0
+# selenium>=4.10.0  # COMENTADO - consume mucha memoria
+fpdf>=1.7.2
+gunicorn>=21.0.0
