@@ -37,13 +37,13 @@ def main():
     print(f"✓ NODE_OPTIONS: {os.environ['NODE_OPTIONS']}")
     print("=" * 60)
     
-    # Comando CORRECTO - FUERZA MODO DEV
+    # Comando CORRECTO - FUERZA MODO DEV CON PUERTOS SEPARADOS
     cmd = [
         sys.executable, '-m', 'reflex', 'run',
         '--env', 'dev',  # ← ESTO ES CLAVE - EVITA NextRouter ERROR!
         '--backend-host', '0.0.0.0',
         '--backend-port', port,
-        '--frontend-port', port
+        '--frontend-port', str(int(port) + 1)  # ← PUERTO SEPARADO PARA FRONTEND
     ]
     
     print("🔥 COMANDO EJECUTADO:")
