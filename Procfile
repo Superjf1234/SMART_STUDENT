@@ -1,1 +1,1 @@
-web: python web_start.py
+web: python ultra_simple_start.py
