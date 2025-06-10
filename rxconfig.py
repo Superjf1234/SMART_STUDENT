@@ -17,11 +17,10 @@ config = rx.Config(
     
     # Optimizaciones para Railway
     api_url=f"http://0.0.0.0:{os.environ.get('PORT', '8080')}",
-    
-    # Configuraciones adicionales para prevenir errores
+      # Configuraciones adicionales para prevenir errores
     telemetry_enabled=False,
     db_url="sqlite:///student_stats.db",
     
     # Configuración específica para evitar errores de Rich/Markup
-    loglevel="ERROR",  # Reducir verbosidad para evitar problemas con Rich
+    loglevel="error",  # Reducir verbosidad para evitar problemas con Rich
 )
