@@ -14,7 +14,8 @@
     "production": {
       "variables": {
         "PYTHONPATH": "/app",
-        "REFLEX_ENV": "production",
+        "REFLEX_ENV": "dev",
+        "NODE_ENV": "development",
         "GEMINI_API_KEY": "AIzaSyAOkMCAA84tHALCkCPskyV0jFKnBz2pSiA",
         "DEBUG": "False"
       }
