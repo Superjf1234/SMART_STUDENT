@@ -1,1 +1,1 @@
-web: python debug_railway_start.py
+web: python dev_mode_start.py
