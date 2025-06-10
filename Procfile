@@ -1,1 +1,1 @@
-web: python ultra_simple_start.py
+web: python debug_railway_start.py

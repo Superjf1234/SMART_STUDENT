@@ -38,16 +38,12 @@ RUN mkdir -p /app/data /app/.web
 EXPOSE 8080
 
 # Variables de entorno optimizadas para Railway
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/mi_app_estudio
 ENV REFLEX_ENV=prod
 ENV PORT=8080
 ENV NODE_OPTIONS="--max-old-space-size=256"
 ENV BUN_CONFIG_NO_CLEAR_TERMINAL=true
 ENV PYTHONUNBUFFERED=1
 
-# Comando de healthcheck para Railway
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python railway_healthcheck.py || exit 1
-
-# Comando para ejecutar la aplicación
-CMD ["python", "start_railway.py"]
+# Comando para ejecutar la aplicación (Railway usará Procfile si existe)
+CMD ["python", "ultra_simple_start.py"]
