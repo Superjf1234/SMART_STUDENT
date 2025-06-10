@@ -1,1 +1,1 @@
-web: python start_railway_minimal.py
+web: python railway_init_deploy.py
