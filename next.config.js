@@ -1,61 +1,68 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Optimizaciones para Railway con memoria limitada
+  // CONFIGURACIÓN ULTRA-AGRESIVA PARA PREVENIR SIGBUS
+  
+  // Desactivar todo lo que pueda causar problemas de memoria
   experimental: {
-    // Reducir el uso de memoria
     workerThreads: false,
     cpus: 1,
+    esmExternals: false,
   },
   
-  // Configuración de build optimizada
+  // Build configuration ultra-simple
   typescript: {
-    // Ignorar errores de TypeScript durante el build para evitar crashes
     ignoreBuildErrors: true,
   },
   
   eslint: {
-    // Ignorar errores de ESLint durante el build
     ignoreDuringBuilds: true,
   },
   
-  // Optimización de imágenes deshabilitada para reducir memoria
+  // Imágenes sin optimización
   images: {
     unoptimized: true,
   },
   
-  // Reducir el uso de memoria en el build
+  // Desactivar minificación pesada
   swcMinify: false,
   
   // Configuración para Railway
   output: 'standalone',
   
-  // Configuración de webpack optimizada
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      // Limitar el uso de memoria en el cliente
-      config.optimization.splitChunks = {
-        chunks: 'all',
-        cacheGroups: {
-          default: {
-            minChunks: 1,
-            priority: -20,
-            reuseExistingChunk: true,
-          },
-          vendor: {
-            test: /[\\/]node_modules[\\/]/,
-            name: 'vendors',
-            priority: -10,
-            chunks: 'all',
-          },
-        },
-      };
+  // Webpack ultra-simple
+  webpack: (config, { isServer, dev }) => {
+    // En desarrollo, usar configuración mínima
+    if (dev) {
+      config.optimization.minimize = false;
+      config.optimization.splitChunks = false;
+      return config;
     }
     
-    // Configuración de memoria para webpack
+    // En producción, configuración ultra-ligera
     config.optimization.minimize = false;
+    config.optimization.splitChunks = {
+      chunks: 'all',
+      maxSize: 200000, // Chunks muy pequeños
+      cacheGroups: {
+        default: {
+          minChunks: 1,
+          priority: -20,
+          reuseExistingChunk: true,
+        },
+      },
+    };
     
     return config;
   },
+  
+  // Reducir uso de memoria
+  onDemandEntries: {
+    maxInactiveAge: 25 * 1000,
+    pagesBufferLength: 2,
+  },
+  
+  // Desactivar telemetría y características pesadas
+  telemetry: false,
 };
 
 module.exports = nextConfig;
