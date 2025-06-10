@@ -10,14 +10,14 @@ config = rx.Config(
     
     # Configuración de red
     backend_host="0.0.0.0",
-    backend_port=int(os.environ.get("PORT", "8080")),
-    frontend_port=int(os.environ.get("PORT", "8080")),
+    backend_port=int(os.environ.get("BACKEND_PORT", os.environ.get("PORT", "8080"))),
+    frontend_port=int(os.environ.get("FRONTEND_PORT", "3000")),
     
     # FORZAR MODO DESARROLLO - Evita build de producción
     env=rx.Env.DEV,  # SIEMPRE desarrollo, incluso en Railway
     
     # Optimizaciones críticas para Railway
-    api_url=f"http://0.0.0.0:{os.environ.get('PORT', '8080')}",
+    api_url=f"http://0.0.0.0:{os.environ.get('BACKEND_PORT', os.environ.get('PORT', '8080'))}",
     
     # Configuraciones para prevenir errores
     telemetry_enabled=False,

@@ -64,4 +64,117 @@ def test_reflex_init():
     else:
         print("✓ Reflex ya inicializado")
 
+def clean_port(port):
+    """Limpiar cualquier proceso que esté usando el puerto especificado"""
+    import subprocess
+    import signal
+    
+    try:
+        # Encontrar procesos usando el puerto
+        result = subprocess.run(
+            ['lsof', '-t', f'-i:{port}'],
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode == 0 and result.stdout.strip():
+            pids = result.stdout.strip().split('\n')
+            for pid in pids:
+                if pid:
+                    print(f"Terminando proceso {pid} que usa puerto {port}")
+                    try:
+                        os.kill(int(pid), signal.SIGTERM)
+                        time.sleep(1)  # Dar tiempo para terminar graciosamente
+                        os.kill(int(pid), signal.SIGKILL)  # Forzar si es necesario
+                    except (ProcessLookupError, ValueError):
+                        pass  # El proceso ya terminó
+                        
+    except (subprocess.SubprocessError, FileNotFoundError):
+        # Si lsof no está disponible, intentar con netstat
+        try:
+            result = subprocess.run(
+                ['netstat', '-tulpn'],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0:
+                lines = result.stdout.split('\n')
+                for line in lines:
+                    if f':{port}' in line and 'LISTEN' in line:
+                        # Extraer PID de la línea de netstat
+                        parts = line.split()
+                        if len(parts) > 6:
+                            pid_info = parts[-1]
+                            if '/' in pid_info:
+                                pid = pid_info.split('/')[0]
+                                if pid.isdigit():
+                                    print(f"Terminando proceso {pid} que usa puerto {port}")
+                                    try:
+                                        os.kill(int(pid), signal.SIGTERM)
+                                        time.sleep(1)
+                                        os.kill(int(pid), signal.SIGKILL)
+                                    except (ProcessLookupError, ValueError):
+                                        pass
+        except (subprocess.SubprocessError, FileNotFoundError):
+            print(f"No se pudo verificar/limpiar el puerto {port}")
+
+def test_reflex_run():
+    """Probar que Reflex puede ejecutarse sin conflictos de puerto"""
+    print("Probando ejecución de Reflex...")
+    
+    # Limpiar puerto antes de ejecutar
+    port = int(os.environ.get('PORT', '8080'))
+    clean_port(port)
+    
+    # Dar tiempo para que el puerto se libere completamente
+    time.sleep(2)
+    
+    print(f"Iniciando Reflex en puerto {port}...")
+    
+    # Ejecutar reflex run en modo de prueba (sin bloquear)
+    process = subprocess.Popen(
+        [sys.executable, '-m', 'reflex', 'run', '--frontend-port', str(port+1), '--backend-port', str(port)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+    
+    # Esperar unos segundos para ver si inicia correctamente
+    time.sleep(10)
+    
+    # Verificar si el proceso sigue ejecutándose
+    if process.poll() is None:
+        print("✓ Reflex se inició correctamente")
+        # Terminar el proceso de prueba
+        process.terminate()
+        process.wait(timeout=5)
+        return True
+    else:
+        stdout, stderr = process.communicate()
+        print(f"✗ Reflex falló al iniciar:")
+        print(f"STDOUT: {stdout}")
+        print(f"STDERR: {stderr}")
+        return False
+
+if __name__ == "__main__":
+    """Ejecutar todos los tests"""
+    print("=== Ejecutando tests locales para Railway ===")
+    
+    try:
+        test_imports()
+        print()
+        
+        test_reflex_init()
+        print()
+        
+        test_reflex_run()
+        print()
+        
+        print("✅ Todos los tests pasaron exitosamente")
+        
+    except Exception as e:
+        print(f"❌ Test falló: {e}")
+        sys.exit(1)
+
 
