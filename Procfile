@@ -1,1 +1,1 @@
-web: python dev_mode_start.py
+web: python port_fixed_start.py
