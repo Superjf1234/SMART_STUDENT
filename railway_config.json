@@ -1,0 +1,23 @@
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "numReplicas": 1,
+    "restartPolicyType": "ON_FAILURE",
+    "healthcheckPath": "/",
+    "healthcheckTimeout": 300
+  },
+  "environments": {
+    "production": {
+      "variables": {
+        "REFLEX_ENV": "dev",
+        "REFLEX_DISABLE_TELEMETRY": "true",
+        "REFLEX_DEBUG": "false",
+        "PYTHONUNBUFFERED": "1",
+        "NODE_OPTIONS": "--max-old-space-size=256",
+        "HOST": "0.0.0.0"
+      }
+    }
+  }
+}

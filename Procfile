@@ -1,1 +1,1 @@
-web: python sigbus_prevention_start.py
+web: python emergency_railway_simple.py
