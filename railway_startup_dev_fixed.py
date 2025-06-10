@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Script de inicio para Railway - ACTUALIZADO para evitar errores NextRouter
-Soluciona: NextRouter not mounted y JavaScript heap out of memory
+Script de inicio FIJO para Railway - Evita errores de NextRouter
+Soluciona el problema de NextRouter not mounted y errores de build en producción
 """
 import os
 import sys
@@ -9,7 +9,7 @@ import subprocess
 import time
 
 def main():
-    print("🚂 RAILWAY STARTUP - SMART STUDENT (UPDATED)")
+    print("🚂 RAILWAY STARTUP - SMART STUDENT (FIXED)")
     print("=" * 60)
     
     # FORZAR MODO DESARROLLO (esto soluciona NextRouter error)
@@ -29,11 +29,6 @@ def main():
     # PYTHONPATH para Railway
     current_dir = '/app'
     os.environ['PYTHONPATH'] = f'{current_dir}:{current_dir}/mi_app_estudio'
-    
-    # Verificar GEMINI_API_KEY
-    if 'GEMINI_API_KEY' not in os.environ:
-        print("⚠️ GEMINI_API_KEY no definida - usando clave de desarrollo")
-        os.environ['GEMINI_API_KEY'] = "AIzaSyAOkMCAA84tHALCkCPskyV0jFKnBz2pSiA"
     
     print(f"✓ REFLEX_ENV: {os.environ['REFLEX_ENV']} (DESARROLLO)")
     print(f"✓ NODE_ENV: {os.environ['NODE_ENV']} (DESARROLLO)")  
