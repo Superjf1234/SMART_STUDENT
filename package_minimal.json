@@ -1,0 +1,15 @@
+{
+  "name": "smart-student-minimal",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Dev mode - no build required'",
+    "build": "echo 'Build skipped in dev mode'",
+    "start": "echo 'Starting dev server'"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
