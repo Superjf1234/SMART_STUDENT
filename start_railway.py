@@ -61,19 +61,12 @@ def initialize_reflex():
             "BUN_CONFIG_NO_CLEAR_TERMINAL": "true"
         })
         
-        result = subprocess.run(
-            ["python", "-m", "reflex", "install-frontend-packages"],
-            env=env,
-            capture_output=True, 
-            text=True, 
-            timeout=120
-        )
-        
-        if result.returncode != 0:
-            print(f"Advertencia al instalar paquetes frontend: {result.stderr}")
-            # Intentar con npm como fallback
-            print("Intentando instalación con npm como fallback...")
-            subprocess.run(["npm", "install"], cwd=".web", timeout=60)
+        # Verificar si las dependencias frontend están instaladas
+        if not os.path.exists(".web/node_modules"):
+            print("Instalando dependencias frontend con npm...")
+            subprocess.run(["npm", "install"], cwd=".web", timeout=120)
+        else:
+            print("Dependencias frontend ya están instaladas")
             
     except subprocess.TimeoutExpired:
         print("Inicialización tomó demasiado tiempo, continuando...")
@@ -97,7 +90,6 @@ def main():
         "--env", "prod",
         "--backend-host", "0.0.0.0", 
         "--backend-port", port,
-        "--frontend-host", "0.0.0.0",
         "--frontend-port", port
     ]
     
