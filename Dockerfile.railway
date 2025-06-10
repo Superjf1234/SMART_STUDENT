@@ -1,0 +1,47 @@
+# Dockerfile optimizado para Railway - EVITA OUT OF MEMORY
+FROM python:3.12-slim
+
+# Variables de entorno críticas para evitar build de producción
+ENV REFLEX_ENV=dev
+ENV NODE_ENV=development
+ENV NEXT_BUILD=false
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Configuración de memoria para Node.js
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
+# Instalar dependencias del sistema mínimas
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instalar Node.js (versión LTS estable)
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs
+
+# Establecer directorio de trabajo
+WORKDIR /app
+
+# Copiar requirements y instalar dependencias Python
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código fuente
+COPY . .
+
+# Crear directorio .web con configuración mínima
+RUN mkdir -p .web && echo '{"name": "mi_app_estudio_web", "version": "1.0.0", "private": true}' > .web/package.json
+
+# Usar la configuración de Railway optimizada
+RUN cp rxconfig_railway_fix.py rxconfig.py
+
+# Hacer ejecutable el script de inicio
+RUN chmod +x railway_memory_fix.py
+
+# Exponer puerto
+EXPOSE ${PORT:-8080}
+
+# Comando de inicio optimizado para Railway
+CMD ["python", "railway_memory_fix.py"]
