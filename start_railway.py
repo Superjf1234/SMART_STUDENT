@@ -35,19 +35,22 @@ def main():
     print(f"✓ REFLEX_ENV: {os.environ['REFLEX_ENV']} (FORZADO A DESARROLLO)")
     print(f"✓ NODE_ENV: {os.environ['NODE_ENV']} (FORZADO A DESARROLLO)")
     print(f"✓ GEMINI_API_KEY: {'Configurada' if os.environ.get('GEMINI_API_KEY') else 'NO ENCONTRADA'}")
-    print(f"✓ Puerto: {port}")
+    print(f"✓ Puerto Frontend/Backend: {port} (MISMO PUERTO PARA RAILWAY HEALTHCHECK)")
     print(f"✓ PYTHONPATH: {os.environ['PYTHONPATH']}")
     print("=" * 60)
     print("⚠️ NOTA: Este script FUERZA modo desarrollo, ignora configuración externa")
+    print("🚂 RAILWAY: Frontend y Backend usan el MISMO puerto para healthcheck")
     print("=" * 60)
     
     # COMANDO FORZADO - NUNCA USAR PRODUCCIÓN
+    # ⚠️ RAILWAY FIX: Frontend y Backend en MISMO puerto para healthcheck
     cmd = [
         sys.executable, '-m', 'reflex', 'run',
         '--env', 'dev',  # ← HARDCODED - NUNCA CAMBIAR A PROD
         '--backend-host', '0.0.0.0',
         '--backend-port', port,
-        '--frontend-port', str(int(port) + 1)
+        '--frontend-host', '0.0.0.0',  # ← AÑADIDO: Frontend también en 0.0.0.0
+        '--frontend-port', port  # ← CAMBIADO: Mismo puerto que backend
     ]
     
     print("🔥 COMANDO EJECUTADO (DESARROLLO FORZADO):")
