@@ -42,15 +42,14 @@ def main():
     print("🚂 RAILWAY: Frontend y Backend usan el MISMO puerto para healthcheck")
     print("=" * 60)
     
-    # COMANDO FORZADO - NUNCA USAR PRODUCCIÓN
-    # ⚠️ RAILWAY FIX: Frontend y Backend en MISMO puerto para healthcheck
+    # COMANDO CORREGIDO - SIN OPCIONES INVÁLIDAS
+    # ⚠️ RAILWAY FIX: Solo usar opciones válidas de Reflex
     cmd = [
         sys.executable, '-m', 'reflex', 'run',
         '--env', 'dev',  # ← HARDCODED - NUNCA CAMBIAR A PROD
         '--backend-host', '0.0.0.0',
-        '--backend-port', port,
-        '--frontend-host', '0.0.0.0',  # ← AÑADIDO: Frontend también en 0.0.0.0
-        '--frontend-port', port  # ← CAMBIADO: Mismo puerto que backend
+        '--backend-port', port
+        # ← REMOVIDO: --frontend-host y --frontend-port (opciones inválidas)
     ]
     
     print("🔥 COMANDO EJECUTADO (DESARROLLO FORZADO):")

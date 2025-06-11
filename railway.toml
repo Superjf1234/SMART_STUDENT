@@ -2,7 +2,7 @@
 builder = "dockerfile"
 
 [deploy]
-startCommand = "./railway_startup_optimized.sh"
+startCommand = "python railway_simple_start.py"
 healthcheckPath = "/"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
