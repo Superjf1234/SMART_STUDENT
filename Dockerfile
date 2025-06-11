@@ -3,9 +3,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Instalar dependencias del sistema mínimas
+# Instalar dependencias del sistema mínimas (incluyendo unzip para Reflex)
 RUN apt-get update && apt-get install -y \
     curl \
+    unzip \
     nodejs \
     npm \
     && rm -rf /var/lib/apt/lists/*
