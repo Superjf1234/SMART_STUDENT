@@ -2654,11 +2654,6 @@ def main_dashboard():
         spacing="0",
      )
 
-# Health check endpoint para Railway
-def health_check():
-    """Endpoint simple para healthcheck de Railway"""
-    return {"status": "healthy", "service": "smart_student"}
-
 # Definición y Configuración de la App
 app = rx.App(
     stylesheets=GOOGLE_FONT_STYLESHEET,
@@ -2676,16 +2671,6 @@ app = rx.App(
 rx.Config.static_dir = "assets"
 rx.Config.title = "Smart Student | Aprende, Crea y Destaca"
 rx.Config.favicon = "/favicon.ico"
-
-# Agregar ruta de healthcheck para Railway
-@app.api.get("/health")
-def api_health():
-    return {"status": "healthy", "message": "Smart Student is running"}
-
-# Ruta raíz para healthcheck básico
-@app.api.get("/")
-def api_root():
-    return {"status": "ok", "app": "smart_student"}
 
 @app.add_page
 def index() -> rx.Component:
