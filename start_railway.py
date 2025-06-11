@@ -19,12 +19,24 @@ def main():
     os.environ['NEXT_TELEMETRY_DISABLED'] = '1'
     os.environ['DISABLE_TELEMETRY'] = '1'
     
+    # VERIFICAR Y CONFIGURAR GEMINI_API_KEY
+    if 'GEMINI_API_KEY' not in os.environ or not os.environ['GEMINI_API_KEY']:
+        print("⚠️ GEMINI_API_KEY no encontrada, usando clave de desarrollo")
+        os.environ['GEMINI_API_KEY'] = "AIzaSyAOkMCAA84tHALCkCPskyV0jFKnBz2pSiA"
+    else:
+        print("✓ GEMINI_API_KEY encontrada en variables de entorno")
+    
     # Puerto de Railway
     port = os.environ.get('PORT', '8000')
     
+    # PYTHONPATH para Railway
+    os.environ['PYTHONPATH'] = '/app:/app/mi_app_estudio'
+    
     print(f"✓ REFLEX_ENV: {os.environ['REFLEX_ENV']} (FORZADO A DESARROLLO)")
     print(f"✓ NODE_ENV: {os.environ['NODE_ENV']} (FORZADO A DESARROLLO)")
+    print(f"✓ GEMINI_API_KEY: {'Configurada' if os.environ.get('GEMINI_API_KEY') else 'NO ENCONTRADA'}")
     print(f"✓ Puerto: {port}")
+    print(f"✓ PYTHONPATH: {os.environ['PYTHONPATH']}")
     print("=" * 60)
     print("⚠️ NOTA: Este script FUERZA modo desarrollo, ignora configuración externa")
     print("=" * 60)
