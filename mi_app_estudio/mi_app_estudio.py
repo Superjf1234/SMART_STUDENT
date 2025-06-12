@@ -254,14 +254,7 @@ def vista_pregunta_activa():
                                             rx.checkbox(
                                                 # Corrección para evitar que las opciones aparezcan preseleccionadas
                                                 # Solo marcar como checked si el ID específicamente está en el conjunto de respuestas
-                                                is_checked=rx.cond(
-                                                    # Primero verificar si hay una respuesta guardada y es un conjunto (set)
-                                                    (EvaluationState.eval_user_answers.get(EvaluationState.eval_current_idx) != None),
-                                                    # Si hay respuesta, verificar si este ID específico está en el conjunto mediante un método seguro
-                                                    EvaluationState.check_if_option_selected(EvaluationState.eval_current_idx, opcion["id"]),
-                                                    # Si no hay respuesta, siempre devolver False (no seleccionado)
-                                                    False
-                                                ),
+                                                is_checked=EvaluationState.check_if_option_selected(EvaluationState.eval_current_idx, opcion["id"]),
                                                 on_change=lambda selected=None, opt_id=opcion["id"]: EvaluationState.toggle_multiple_answer(opt_id),
                                                 size="2",
                                                 is_disabled=EvaluationState.is_reviewing_eval,
