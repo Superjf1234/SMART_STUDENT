@@ -687,7 +687,7 @@ class EvaluationState(AppState):
                     c_ans_single = q_dict.get("correcta", q_dict.get("respuesta_correcta"))
                     # Manejo especial para booleanos de V/F si vinieran así
                     if isinstance(c_ans_single, bool):
-                        c_ans_single = "verdadero" if c_ans_single else "falso"
+                        c_ans_single = "verdadero" if cAns_single else "falso"
 
                     # Normalización para verdadero/falso
                     if tipo_pregunta == "verdadero_falso":
@@ -1055,28 +1055,8 @@ class EvaluationState(AppState):
                         # Colocar alternativas en las siguientes 5 posiciones disponibles
                         for i in range(min(5, len(preguntas_alt))):
                             if i + 5 < len(posiciones_disponibles):
-                                preguntas_distribuidas[posiciones_disponibles[i + 5]] = preguntas_alt[i]                    # Verificar si hay posiciones vacías (None) y llenarlas con lo que tengamos
-                    tipos_restantes = []
-                    if len(preguntas_vf) > 5:
-                        tipos_restantes.extend(preguntas_vf[5:])
-                    if len(preguntas_alt) > 5:
-                        tipos_restantes.extend(preguntas_alt[5:])
-                    if len(preguntas_sm) > 5:
-                        tipos_restantes.extend(preguntas_sm[5:])
-                    
-                    # Llenar posiciones vacías con preguntas restantes
-                    for i in range(15):
-                        if preguntas_distribuidas[i] is None:
-                            if tipos_restantes:
-                                preguntas_distribuidas[i] = tipos_restantes.pop(0)
-                            else:
-                                # Si no quedan preguntas, duplicar alguna existente
-                                print("ADVERTENCIA: Insuficientes preguntas únicas, duplicando existentes")
-                                # Buscar una pregunta existente para duplicar
-                                for j in range(15):
-                                    if preguntas_distribuidas[j] is not None:
-                                        preguntas_distribuidas[i] = preguntas_distribuidas[j]
-                                        break
+                                preguntas_distribuidas[posiciones_disponibles[i + 5]] = preguntas_alt[i]
+                            
                     # Verificar que tenemos exactamente 15 preguntas
                     if len(preguntas_distribuidas) != 15:
                         print(f"ERROR: La distribución final tiene {len(preguntas_distribuidas)} preguntas en lugar de 15")
@@ -1136,3 +1116,58 @@ class EvaluationState(AppState):
         finally:
             self.is_generation_in_progress = False
             yield # Mostrar el resultado final
+
+    # Helper methods for score comparisons to avoid direct comparison operators on State vars
+    def get_score_color_tier(self) -> str:
+        """Returns the appropriate color based on the score tier.
+        
+        Returns:
+            A string with the CSS color variable.
+        """
+        score = self.eval_score_rounded
+        if score < 40:
+            return "var(--red-9)"
+        elif score < 60:
+            return "var(--orange-9)"
+        elif score < 80:
+            return "var(--amber-9)"
+        elif score < 90:
+            return "var(--green-9)"
+        else:
+            return "var(--teal-9)"
+            
+    def get_score_background_color(self) -> str:
+        """Returns the appropriate background color based on the score tier.
+        
+        Returns:
+            A string with the CSS color variable.
+        """
+        score = self.eval_score_rounded
+        if score < 40:
+            return "var(--red-2)"
+        elif score < 60:
+            return "var(--orange-2)"
+        elif score < 80:
+            return "var(--amber-2)"
+        elif score < 90:
+            return "var(--green-2)"
+        else:
+            return "var(--teal-2)"
+            
+    def get_score_border_color(self) -> str:
+        """Returns the appropriate border color based on the score tier.
+        
+        Returns:
+            A string with the CSS color variable.
+        """
+        score = self.eval_score_rounded
+        if score < 40:
+            return "var(--red-6)"
+        elif score < 60:
+            return "var(--orange-6)"
+        elif score < 80:
+            return "var(--amber-6)"
+        elif score < 90:
+            return "var(--green-6)"
+        else:
+            return "var(--teal-6)"
