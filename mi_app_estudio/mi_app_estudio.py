@@ -1289,8 +1289,8 @@ def resumen_tab():
                             rx.spinner(size="2"), 
                             rx.cond(
                                 AppState.current_language == "es",
-                                "Generando resumen...",
-                                "Generating summary..."
+                                rx.text("Generando resumen..."),
+                                rx.text("Generating summary...")
                             )
                         ),
                         rx.cond(
