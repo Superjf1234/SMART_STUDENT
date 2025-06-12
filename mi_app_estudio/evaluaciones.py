@@ -1118,6 +1118,7 @@ class EvaluationState(AppState):
             yield # Mostrar el resultado final
 
     # Helper methods for score comparisons to avoid direct comparison operators on State vars
+    @rx.var
     def get_score_color_tier(self) -> str:
         """Returns the appropriate color based on the score tier.
         
@@ -1136,6 +1137,7 @@ class EvaluationState(AppState):
         else:
             return "var(--teal-9)"
             
+    @rx.var
     def get_score_background_color(self) -> str:
         """Returns the appropriate background color based on the score tier.
         
@@ -1154,6 +1156,7 @@ class EvaluationState(AppState):
         else:
             return "var(--teal-2)"
             
+    @rx.var
     def get_score_border_color(self) -> str:
         """Returns the appropriate border color based on the score tier.
         
