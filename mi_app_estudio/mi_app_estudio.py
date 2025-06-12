@@ -54,7 +54,7 @@ def vista_pregunta_activa():
                             rx.radio_group(
                                 ["Verdadero", "Falso"],  # Los items como lista directamente
                                 value=EvaluationState.current_radio_group_value,
-                                on_change=lambda value: EvaluationState.set_eval_answer(value.lower()),
+                                on_change=EvaluationState.set_eval_answer_by_text,
                                 size="2",                                width="100%",
                                 # Usamos 'column' en lugar de 'vertical'
                                 direction="column", 
