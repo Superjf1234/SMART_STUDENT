@@ -427,16 +427,7 @@ def vista_pregunta_activa():
                                         EvaluationState.eval_titulo_resultado,
                                         size="4",
                                         text_align="center",
-                                        color=rx.cond(
-                                            (EvaluationState.eval_score < 40), "var(--orange-9)",
-                                            rx.cond(
-                                                (EvaluationState.eval_score >= 40) & (EvaluationState.eval_score < 60), "var(--amber-9)",
-                                                rx.cond(
-                                                    (EvaluationState.eval_score >= 60) & (EvaluationState.eval_score < 80), "var(--green-9)",
-                                                    "var(--teal-9)"
-                                                )
-                                            )
-                                        ),
+                                        color=EvaluationState.get_score_color_tier(),
                                     ),
                                     align_items="center",
                                     width="100%",
@@ -456,19 +447,7 @@ def vista_pregunta_activa():
                                                 f"{EvaluationState.eval_score}%"
                                             ),
                                             size="1",
-                                            color=rx.cond(
-                                                (EvaluationState.eval_score < 40), "var(--red-9)",
-                                                rx.cond(
-                                                    (EvaluationState.eval_score >= 40) & (EvaluationState.eval_score < 60), "var(--orange-9)",
-                                                    rx.cond(
-                                                        (EvaluationState.eval_score >= 60) & (EvaluationState.eval_score < 80), "var(--amber-9)",
-                                                        rx.cond(
-                                                            (EvaluationState.eval_score >= 80) & (EvaluationState.eval_score < 90), "var(--green-9)",
-                                                            "var(--teal-9)"
-                                                        )
-                                                    )
-                                                )
-                                            ),
+                                            color=EvaluationState.get_score_color_tier(),
                                             text_align="center",
                                         ),
                                         rx.text(
@@ -488,33 +467,9 @@ def vista_pregunta_activa():
                                     display="flex",
                                     align_items="center",
                                     justify_content="center",
-                                    bg=rx.cond(
-                                        (EvaluationState.eval_score < 40), "var(--red-2)",
-                                        rx.cond(
-                                            (EvaluationState.eval_score >= 40) & (EvaluationState.eval_score < 60), "var(--orange-2)",
-                                            rx.cond(
-                                                (EvaluationState.eval_score >= 60) & (EvaluationState.eval_score < 80), "var(--amber-2)",
-                                                rx.cond(
-                                                    (EvaluationState.eval_score >= 80) & (EvaluationState.eval_score < 90), "var(--green-2)",
-                                                    "var(--teal-2)"
-                                                )
-                                            )
-                                        )
-                                    ),
+                                    bg=EvaluationState.get_score_background_color(),
                                     border="3px solid",
-                                    border_color=rx.cond(
-                                        (EvaluationState.eval_score < 40), "var(--red-6)",
-                                        rx.cond(
-                                            (EvaluationState.eval_score >= 40) & (EvaluationState.eval_score < 60), "var(--orange-6)",
-                                            rx.cond(
-                                                (EvaluationState.eval_score >= 60) & (EvaluationState.eval_score < 80), "var(--amber-6)",
-                                                rx.cond(
-                                                    (EvaluationState.eval_score >= 80) & (EvaluationState.eval_score < 90), "var(--green-6)",
-                                                    "var(--teal-6)"
-                                                )
-                                            )
-                                        )
-                                    ),
+                                    border_color=EvaluationState.get_score_border_color(),
                                     shadow="lg",
                                 ),
                                 width="100%",
@@ -539,13 +494,7 @@ def vista_pregunta_activa():
                                         font_style="italic",
                                         font_weight="medium",
                                         text_align="center",  # Asegura centrado del texto
-                                        color=rx.cond(
-                                            (EvaluationState.eval_score >= 80), "var(--teal-9)",
-                                            rx.cond(
-                                                (EvaluationState.eval_score >= 60), "var(--green-9)",
-                                                "var(--gray-9)"
-                                            )
-                                        ),
+                                        color=EvaluationState.get_score_color_tier(),
                                         font_size="1.1em",
                                     ),
                                     rx.text(
@@ -553,13 +502,7 @@ def vista_pregunta_activa():
                                         font_style="italic",
                                         font_weight="medium",
                                         text_align="center",  # Asegura centrado del texto
-                                        color=rx.cond(
-                                            (EvaluationState.eval_score >= 80), "var(--teal-9)",
-                                            rx.cond(
-                                                (EvaluationState.eval_score >= 60), "var(--green-9)",
-                                                "var(--gray-9)"
-                                            )
-                                        ),
+                                        color=EvaluationState.get_score_color_tier(),
                                         font_size="1.1em",
                                     ),
                                     spacing="0",
