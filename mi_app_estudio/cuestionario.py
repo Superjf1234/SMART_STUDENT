@@ -355,7 +355,7 @@ def cuestionario_tab_content() -> rx.Component:
                                 margin_bottom="0.5em",
                             ),
                             rx.text(
-                                pregunta.get("pregunta", ""),
+                                pregunta["pregunta"],
                                 margin_bottom="1em",
                                 font_weight="medium",
                             ),
@@ -369,7 +369,7 @@ def cuestionario_tab_content() -> rx.Component:
                                     font_weight="bold",
                                     margin_top="0.5em", # Adjusted margin
                                 ),
-                                rx.text(pregunta.get("explicacion", "")),
+                                rx.text(pregunta["explicacion"]),
                                 padding="0.5em",
                                 border_radius="md",
                                 bg="var(--gray-2)", # Light background for answer section
