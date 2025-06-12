@@ -2011,11 +2011,11 @@ def perfil_tab():
                         rx.foreach(
                             AppState.historial_evaluaciones_paginado,
                             lambda evaluacion, i: rx.hstack(
-                                rx.text(evaluacion.get("fecha", ""), width="20%", text_align="center", white_space="nowrap", color="var(--gray-12)"),
-                                rx.text(evaluacion.get("libro", ""), width="25%", text_align="center", white_space="nowrap", color="var(--gray-12)"),
-                                rx.text(evaluacion.get("tema", ""), width="25%", text_align="center", white_space="nowrap", color="var(--gray-12)"),                                rx.box(
+                                rx.text(evaluacion["fecha"] if "fecha" in evaluacion else "", width="20%", text_align="center", white_space="nowrap", color="var(--gray-12)"),
+                                rx.text(evaluacion["libro"] if "libro" in evaluacion else "", width="25%", text_align="center", white_space="nowrap", color="var(--gray-12)"),
+                                rx.text(evaluacion["tema"] if "tema" in evaluacion else "", width="25%", text_align="center", white_space="nowrap", color="var(--gray-12)"),                                rx.box(
                                     rx.hstack(
-                                        rx.text(f"{evaluacion.get('calificacion', 0)}%", color="var(--gray-12)"),
+                                        rx.text(f"{evaluacion['calificacion'] if 'calificacion' in evaluacion else 0}%", color="var(--gray-12)"),
                                         rx.icon("star", color="var(--yellow-9)"),
                                         spacing="2",
                                     ),
@@ -2026,7 +2026,7 @@ def perfil_tab():
                                 ),
                                 rx.box(
                                     rx.text(
-                                        f"{evaluacion.get('respuestas_correctas', 0)}/{evaluacion.get('total_preguntas', 0)}",
+                                        f"{evaluacion['respuestas_correctas'] if 'respuestas_correctas' in evaluacion else 0}/{evaluacion['total_preguntas'] if 'total_preguntas' in evaluacion else 0}",
                                         color="var(--green-10)",
                                     ),
                                     width="10%",
@@ -2038,7 +2038,7 @@ def perfil_tab():
                                         "Repasar",
                                         color_scheme="blue",
                                         size="2",
-                                        on_click=lambda curso=evaluacion.get("curso", ""), libro=evaluacion.get("libro", ""), tema=evaluacion.get("tema", ""): AppState.repasar_evaluacion_y_ir(curso, libro, tema),
+                                        on_click=lambda curso=(evaluacion["curso"] if "curso" in evaluacion else ""), libro=(evaluacion["libro"] if "libro" in evaluacion else ""), tema=(evaluacion["tema"] if "tema" in evaluacion else ""): AppState.repasar_evaluacion_y_ir(curso, libro, tema),
                                     ),
                                     width="5%", display="flex", justify_content="center", margin_right="1em"
                                 ),                                width="100%",
