@@ -78,7 +78,7 @@ class EvaluationState(AppState):
         if not self.is_reviewing_eval or self.eval_current_idx >= len(self.eval_preguntas):
             return False
             
-        user_answer = self.eval_user_answers.get(self.eval_current_idx)
+        user_answer = self.eval_user_answers[self.eval_current_idx] if self.eval_current_idx in self.eval_user_answers else None
         correct_answer = self.get_correct_answer_for_current_question()
         
         # Comparar según el tipo de pregunta
@@ -185,17 +185,18 @@ class EvaluationState(AppState):
         if question_idx not in self.eval_user_answers:
             return False
             
-        # Obtener la respuesta del usuario para esta pregunta
-        answer = self.eval_user_answers.get(question_idx)
-        
-        # Si la respuesta es un conjunto (para selección múltiple)
-        if isinstance(answer, set):
-            return option_id in answer
+        # Obtener la respuesta del usuario para esta pregunta si existe
+        if question_idx in self.eval_user_answers:
+            answer = self.eval_user_answers[question_idx]
             
-        # Si la respuesta es una cadena (para otras preguntas)
-        if isinstance(answer, str):
-            return answer == option_id
-            
+            # Si la respuesta es un conjunto (para selección múltiple)
+            if isinstance(answer, set):
+                return option_id in answer
+                
+            # Si la respuesta es una cadena (para otras preguntas)
+            if isinstance(answer, str):
+                return answer == option_id
+                
         return False
 
     @rx.var
@@ -227,7 +228,7 @@ class EvaluationState(AppState):
         if not (0 <= idx < len(self.eval_preguntas)):
             return ""
             
-        answer = self.eval_user_answers.get(idx)
+        answer = self.eval_user_answers[idx] if idx in self.eval_user_answers else None
         current_q = self.eval_preguntas[idx] if idx < len(self.eval_preguntas) else None
         
         # Si no hay respuesta o pregunta actual, retornar cadena vacía
@@ -602,7 +603,7 @@ class EvaluationState(AppState):
 
     def next_eval_question(self):
         """Avanza a la siguiente pregunta."""
-        idx = self.eval_current_idx; user_answer = self.eval_user_answers.get(idx)
+        idx = self.eval_current_idx; user_answer = self.eval_user_answers[idx] if idx in self.eval_user_answers else None
         if user_answer is None or user_answer == "":
             self.eval_error_message = "Por favor, selecciona una respuesta."
             yield; return
@@ -664,7 +665,7 @@ class EvaluationState(AppState):
                 if not isinstance(q_dict, dict): continue
                 
                 # Obtener respuesta del usuario y tipo de pregunta
-                u_ans = self.eval_user_answers.get(i)
+                u_ans = self.eval_user_answers[i] if i in self.eval_user_answers else None
                 tipo_pregunta = q_dict.get("tipo")
                 
                 # Para preguntas de selección múltiple (varias respuestas correctas)
