@@ -25,7 +25,12 @@ Este error ocurría debido a un problema con cómo se manejan las comparaciones 
 ## Archivos Modificados
 
 - `/workspaces/SMART_STUDENT/mi_app_estudio/evaluaciones.py` - Se agregaron los métodos helper
+  - `get_score_color_tier()` - Para determinar el color de texto basado en la puntuación
+  - `get_score_background_color()` - Para determinar el color de fondo basado en la puntuación
+  - `get_score_border_color()` - Para determinar el color de borde basado en la puntuación
 - `/workspaces/SMART_STUDENT/mi_app_estudio/mi_app_estudio.py` - Se reemplazaron todas las comparaciones directas
+
+> ⚠️ **Importante:** Ambos archivos deben ser actualizados en el repositorio para que la aplicación funcione correctamente. Si solo se actualiza uno de ellos, se producirán errores al intentar llamar a métodos que no existen.
 
 ## Validación
 
