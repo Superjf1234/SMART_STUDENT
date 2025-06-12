@@ -39,16 +39,16 @@ def vista_pregunta_activa():
 
                 # --- SI EL ÍNDICE ES VÁLIDO Y LA PREGUNTA EXISTE ---
                 rx.vstack(
-                    # Usamos .get() con default por si acaso la clave falta
+                    # Acceso directo a la clave (sin .get() para evitar VarAttributeError)
                     rx.heading(
-                        EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("pregunta", "Error al cargar pregunta"),
+                        EvaluationState.eval_preguntas[EvaluationState.eval_current_idx]["pregunta"],
                         size="5", mb="1.5em", text_align="left", width="100%"
                     ),
 
                     # Opciones - CORREGIDO para manejar verdadero_falso con un grupo de radio vertical
                     rx.cond(
-                        # Usamos .get() también para el tipo
-                        EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "verdadero_falso",
+                        # Acceso directo al tipo (sin .get() para evitar VarAttributeError)
+                        EvaluationState.eval_preguntas[EvaluationState.eval_current_idx]["tipo"] == "verdadero_falso",
                           # SI ES VERDADERO/FALSO, usamos radio_group con orientación vertical (column)
                         rx.vstack(
                             rx.radio_group(
@@ -143,8 +143,8 @@ def vista_pregunta_activa():
                         
                         # SI NO ES VERDADERO/FALSO, mantenemos el comportamiento original para otras opciones
                         rx.cond(
-                            (EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "opcion_multiple") |
-                            (EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "alternativas"),                            # --- CORRECCIÓN: Cambiamos cómo se crean las opciones de radio ---
+                            (EvaluationState.eval_preguntas[EvaluationState.eval_current_idx]["tipo"] == "opcion_multiple") |
+                            (EvaluationState.eval_preguntas[EvaluationState.eval_current_idx]["tipo"] == "alternativas"),                            # --- CORRECCIÓN: Cambiamos cómo se crean las opciones de radio ---
                             rx.vstack(
                                 rx.radio_group(
                                     # Definimos las opciones como una lista para radio_group
@@ -239,7 +239,7 @@ def vista_pregunta_activa():
 
                             # IMPLEMENTACIÓN PARA SELECCIÓN MÚLTIPLE
                             rx.cond(
-                                EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "seleccion_multiple",
+                                EvaluationState.eval_preguntas[EvaluationState.eval_current_idx]["tipo"] == "seleccion_multiple",
                                   # Implementación para selección múltiple (varias respuestas posibles)
                                 rx.vstack(
                                     rx.text(
@@ -358,7 +358,7 @@ def vista_pregunta_activa():
                                 
                                 # Mensaje para otros tipos de pregunta no implementados
                                 rx.text(
-                                    f"UI para tipo '{EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get('tipo', 'desconocido')}' no implementada.",
+                                    f"UI para tipo '{EvaluationState.eval_preguntas[EvaluationState.eval_current_idx]['tipo']}' no implementada.",
                                     color="gray"
                                 )
                             )
@@ -933,7 +933,7 @@ def login_page():
     # Añadimos los botones de idioma y modo oscuro en la parte superior derecha
     header_buttons = rx.hstack(
         rx.button(
-            rx.cond(AppState.current_language == "es", "ES", "EN"),
+            rx.cond(AppState.current_language == "es", rx.text("ES"), rx.text("EN")),
             variant="soft",
             size="2",
             on_click=AppState.toggle_language,
@@ -2564,7 +2564,7 @@ def main_dashboard():
         rx.heading("STUDENT", size="5", weight="light", color_scheme="gray"),
         rx.spacer(),
         rx.button(
-            rx.cond(AppState.current_language == "es", "ES", "EN"),
+            rx.cond(AppState.current_language == "es", rx.text("ES"), rx.text("EN")),
             variant="soft",
             size="2",
             on_click=AppState.toggle_language,
