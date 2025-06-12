@@ -2672,8 +2672,8 @@ rx.Config.static_dir = "assets"
 rx.Config.title = "Smart Student | Aprende, Crea y Destaca"
 rx.Config.favicon = "/favicon.ico"
 
-@app.add_page("/")
 def index() -> rx.Component:
+    """Página principal de la aplicación."""
     return rx.fragment(
         rx.script(
             "document.title = 'Smart Student | Aprende, Crea y Destaca'"
@@ -2681,3 +2681,6 @@ def index() -> rx.Component:
         rx.html('<link rel="icon" type="image/x-icon" href="/smartstudent_icon.ico">'),
         rx.cond(AppState.is_logged_in, main_dashboard(), login_page()),
     )
+
+# Agregar la página usando la sintaxis moderna de Reflex
+app.add_page(index, route="/", title="Smart Student | Aprende, Crea y Destaca")
