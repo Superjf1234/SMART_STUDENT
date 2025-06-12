@@ -1508,8 +1508,8 @@ def mapa_tab():
                 rx.button(
                     rx.cond(
                         AppState.is_generating_mapa,
-                        rx.hstack(rx.spinner(size="2"), "Generando mapa..."),
-                        "Generar Mapa"
+                        rx.hstack(rx.spinner(size="2"), rx.text("Generando mapa...")),
+                        rx.text("Generar Mapa")
                     ),
                     on_click=AppState.generate_map,
                     size="3",
