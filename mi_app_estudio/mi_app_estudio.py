@@ -427,7 +427,7 @@ def vista_pregunta_activa():
                                         EvaluationState.eval_titulo_resultado,
                                         size="4",
                                         text_align="center",
-                                        color=EvaluationState.get_score_color_tier(),
+                                        color=EvaluationState.get_score_color_tier,
                                     ),
                                     align_items="center",
                                     width="100%",
@@ -447,7 +447,7 @@ def vista_pregunta_activa():
                                                 f"{EvaluationState.eval_score}%"
                                             ),
                                             size="1",
-                                            color=EvaluationState.get_score_color_tier(),
+                                            color=EvaluationState.get_score_color_tier,
                                             text_align="center",
                                         ),
                                         rx.text(
@@ -467,9 +467,9 @@ def vista_pregunta_activa():
                                     display="flex",
                                     align_items="center",
                                     justify_content="center",
-                                    bg=EvaluationState.get_score_background_color(),
+                                    bg=EvaluationState.get_score_background_color,
                                     border="3px solid",
-                                    border_color=EvaluationState.get_score_border_color(),
+                                    border_color=EvaluationState.get_score_border_color,
                                     shadow="lg",
                                 ),
                                 width="100%",
@@ -494,7 +494,7 @@ def vista_pregunta_activa():
                                         font_style="italic",
                                         font_weight="medium",
                                         text_align="center",  # Asegura centrado del texto
-                                        color=EvaluationState.get_score_color_tier(),
+                                        color=EvaluationState.get_score_color_tier,
                                         font_size="1.1em",
                                     ),
                                     rx.text(
@@ -502,7 +502,7 @@ def vista_pregunta_activa():
                                         font_style="italic",
                                         font_weight="medium",
                                         text_align="center",  # Asegura centrado del texto
-                                        color=EvaluationState.get_score_color_tier(),
+                                        color=EvaluationState.get_score_color_tier,
                                         font_size="1.1em",
                                     ),
                                     spacing="0",
