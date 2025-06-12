@@ -1295,8 +1295,8 @@ def resumen_tab():
                         ),
                         rx.cond(
                             AppState.current_language == "es",
-                            "Generar Resumen",
-                            "Generate Summary"
+                            rx.text("Generar Resumen"),
+                            rx.text("Generate Summary")
                         )
                     ),
                     on_click=AppState.generate_summary,
@@ -2672,7 +2672,7 @@ rx.Config.static_dir = "assets"
 rx.Config.title = "Smart Student | Aprende, Crea y Destaca"
 rx.Config.favicon = "/favicon.ico"
 
-@app.add_page
+@app.add_page("/")
 def index() -> rx.Component:
     return rx.fragment(
         rx.script(
