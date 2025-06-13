@@ -8,7 +8,63 @@ import reflex as rx
 import sys, os, datetime, traceback, re
 from typing import Dict, List, Optional, Set, Union, Any
 
-from .evaluaciones import EvaluationState
+# TEMPORAL: Comentar importación problemática
+# from .evaluaciones import EvaluationState
+
+# Crear una clase EvaluationState temporal en el mismo archivo
+class EvaluationState(rx.State):
+    """Estado temporal simplificado para evaluaciones."""
+    is_eval_active: bool = False
+    is_reviewing_eval: bool = False
+    eval_preguntas: List[Dict[str, Any]] = []
+    eval_current_idx: int = 0
+    eval_user_answers: Dict[int, Optional[str]] = {}
+    eval_score: Optional[float] = None
+    eval_correct_count: int = 0
+    eval_total_q: int = 0
+    is_generation_in_progress: bool = False
+    eval_error_message: str = ""
+    eval_timer_active: bool = False
+    eval_timer_paused: bool = False
+    eval_timer_seconds: int = 120
+    show_result_modal: bool = False
+    
+    @rx.var
+    def get_score_color_tier(self) -> str:
+        """Returns the appropriate color based on the score tier."""
+        if self.eval_score is None:
+            return "var(--gray-9)"
+        score = int(round(self.eval_score))
+        if score < 40:
+            return "var(--red-9)"
+        elif score < 60:
+            return "var(--orange-9)"
+        elif score < 80:
+            return "var(--amber-9)"
+        elif score < 90:
+            return "var(--green-9)"
+        else:
+            return "var(--teal-9)"
+    
+    @rx.var
+    def eval_time_formatted(self) -> str:
+        """Formatea el tiempo restante."""
+        minutes = self.eval_timer_seconds // 60
+        seconds = self.eval_timer_seconds % 60
+        return f"{minutes:02d}:{seconds:02d}"
+
+    @rx.var
+    def eval_time_color(self) -> str:
+        """Determina el color del timer."""
+        return "red.500" if self.eval_timer_seconds <= 30 else "inherit"
+
+    @rx.var
+    def eval_progress(self) -> int:
+        """Calcula el progreso de la evaluación."""
+        total = len(self.eval_preguntas)
+        if total == 0: return 0
+        return int(min(100, max(0, ((self.eval_current_idx + 1) / total) * 100)))
+
 # Importar el módulo CuestionarioState para cuestionarios
 from .cuestionario import CuestionarioState, cuestionario_tab_content
 # Importar componentes optimizados para mensajes de revisión
@@ -16,188 +72,59 @@ from .review_components import mensaje_respuesta_correcta, mensaje_respuesta_inc
 
 from .state import AppState, PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME, GOOGLE_FONT_STYLESHEET, FONT_FAMILY, error_callout # Importa AppState y constantes/helpers necesarios desde state.py
 
-# --- AÑADIMOS LA FUNCIÓN PARA MOSTRAR LAS PREGUNTAS ACTIVAS ---
+# --- FUNCIÓN SIMPLIFICADA PARA MOSTRAR LAS PREGUNTAS ACTIVAS ---
 def vista_pregunta_activa():
-    """Componente que muestra la pregunta activa durante la evaluación, accediendo directo al estado y con estructura corregida."""
-
-    # Usamos rx.cond para manejar el caso inicial donde la pregunta puede no estar lista
+    """Componente simplificado que muestra la pregunta activa durante la evaluación."""
     return rx.card(
         rx.vstack(
-            # Encabezado (Progreso y Tiempo)
+            # Encabezado simple
             rx.hstack(
-                rx.text(f"{AppState.question_text} {EvaluationState.eval_current_idx + 1} {AppState.of_text} {EvaluationState.eval_total_q}"),
+                rx.text(f"Pregunta {EvaluationState.eval_current_idx + 1} de {EvaluationState.eval_total_q}"),
                 rx.spacer(),
                 rx.text(EvaluationState.eval_time_formatted, font_weight="bold", color=EvaluationState.eval_time_color),
                 justify="between", width="100%", mb="1em"
             ),
             rx.progress(value=EvaluationState.eval_progress, width="100%", size="2", color_scheme=PRIMARY_COLOR_SCHEME, mb="1.5em"),
-
-            # --- Contenido Condicional ---
-            # Verifica si el índice actual es válido para la lista de preguntas Y la lista no está vacía
+            
+            # Contenido de la pregunta (simplificado)
             rx.cond(
-                (EvaluationState.eval_current_idx >= 0) & (EvaluationState.eval_preguntas.length() > EvaluationState.eval_current_idx),
-
-                # --- SI EL ÍNDICE ES VÁLIDO Y LA PREGUNTA EXISTE ---
+                EvaluationState.eval_preguntas.length() > 0,
                 rx.vstack(
-                    # Usamos .get() con default por si acaso la clave falta
-                    rx.heading(
-                        EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("pregunta", "Error al cargar pregunta"),
-                        size="5", mb="1.5em", text_align="left", width="100%"
-                    ),
-
-                    # Opciones - CORREGIDO para manejar verdadero_falso con un grupo de radio vertical
-                    rx.cond(
-                        # Usamos .get() también para el tipo
-                        EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "verdadero_falso",
-                          # SI ES VERDADERO/FALSO, usamos radio_group con orientación vertical (column)
-                        rx.vstack(
-                            rx.radio_group(
-                                ["Verdadero", "Falso"],  # Los items como lista directamente
-                                value=EvaluationState.current_radio_group_value,
-                                on_change=lambda value: EvaluationState.set_eval_answer(value.lower()),
-                                size="2",                                width="100%",
-                                # Usamos 'column' en lugar de 'vertical'
-                                direction="column", 
-                                spacing="3",  # Espaciado entre opciones
-                                is_disabled=EvaluationState.is_reviewing_eval,  # Deshabilitar en modo revisión
-                            ),
-                            # Mostrar resultado en modo revisión
-                            rx.cond(
-                                EvaluationState.is_reviewing_eval,
-                                rx.box(
-                                    rx.vstack(
-                                        rx.hstack(
-                                            rx.cond(
-                                                EvaluationState.is_current_question_correct_in_review,
-                                                rx.icon(
-                                                    "check-circle",
-                                                    color="green.500", 
-                                                    size=18
-                                                ),
-                                                rx.icon(
-                                                    "x-circle",
-                                                    color="red.500", 
-                                                    size=18
-                                                )
-                                            ),
-                                            rx.cond(
-                                                EvaluationState.is_current_question_correct_in_review,
-                                                mensaje_respuesta_correcta(),
-                                                mensaje_respuesta_incorrecta()
-                                            ),
-                                            spacing="2",
-                                        ),
-                                        rx.cond(
-                                            ~EvaluationState.is_current_question_correct_in_review,
-                                            rx.text(
-                                                f"{AppState.correct_answers_text}: {EvaluationState.get_correct_answer_text}",
-                                                color="gray.700", 
-                                                font_style="italic",
-                                                mt="0.5em"
-                                            ),
-                                        ),
-                                        width="100%",
-                                        align_items="flex_start",
-                                        mt="1em",
-                                        spacing="1",
-                                    ),
-                                    width="100%",
-                                ),
-                            ),
-                            # Sección de Explicación (en modo revisión)
-                            rx.cond(
-                                EvaluationState.is_reviewing_eval & (EvaluationState.get_current_explanation != ""),
-                                rx.box(
-                                    rx.vstack(
-                                        rx.heading(
-                                            "Explicación:",
-                                            size="4",
-                                            color="gray.700",
-                                            mb="0.5em",
-                                            font_style="italic"  # Agregamos cursiva al título
-                                        ),
-                                        rx.text(
-                                            EvaluationState.get_current_explanation,
-                                            color="gray.700",
-                                            line_height="1.6",
-                                            font_style="italic"  # Agregamos cursiva al texto de explicación
-                                        ),
-                                        width="100%",
-                                        align_items="flex_start",
-                                        spacing="2",
-                                        padding="1em",
-                                        margin_top="1.5em",
-                                        border="1px solid var(--gray-4)",
-                                        border_radius="lg",
-                                        bg="var(--gray-1)",
-                                    ),
-                                    width="100%",
-                                    mb="1.5em",
-                                ),
-                            ),
-                            width="100%",
-                            spacing="2",
-                            align_items="flex_start",
-                            mb="1em",
-                        ),
-                        
-                        # SI NO ES VERDADERO/FALSO, mantenemos el comportamiento original para otras opciones
-                        rx.cond(
-                            (EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "opcion_multiple") |
-                            (EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "alternativas"),                            # --- CORRECCIÓN: Cambiamos cómo se crean las opciones de radio ---
-                            rx.vstack(
-                                rx.radio_group(
-                                    # Definimos las opciones como una lista para radio_group
-                                    EvaluationState.get_current_question_options_texts,
-                                    value=EvaluationState.current_radio_group_value,
-                                    on_change=lambda value: EvaluationState.set_eval_answer_by_text(value),
-                                    size="2",
-                                    width="100%",
-                                    direction="column",
-                                    spacing="3",
-                                    is_disabled=EvaluationState.is_reviewing_eval,
-                                ),
-                                # Mostrar resultado en modo revisión
-                                rx.cond(
-                                    EvaluationState.is_reviewing_eval,
-                                    rx.box(
-                                        rx.vstack(
-                                            rx.hstack(
-                                                rx.cond(
-                                                EvaluationState.is_current_question_correct_in_review,
-                                                rx.icon(
-                                                    "check-circle",
-                                                    color="green.500", 
-                                                    size=18
-                                                ),
-                                                rx.icon(
-                                                    "x-circle",
-                                                    color="red.500", 
-                                                    size=18
-                                                )
-                                            ),
-                                                rx.cond(
-                                                EvaluationState.is_current_question_correct_in_review,
-                                                mensaje_respuesta_correcta(),
-                                                mensaje_respuesta_incorrecta()
-                                            ),
-                                                spacing="2",
-                                            ),
-                                            rx.cond(
-                                                ~EvaluationState.is_current_question_correct_in_review,
-                                                rx.text(
-                                                    f"{AppState.correct_answers_text}: {EvaluationState.get_correct_answer_text}",
-                                                    color="gray.700", 
-                                                    font_style="italic",
-                                                    mt="0.5em"
-                                                ),
-                                            ),
-                                            width="100%",
-                                            align_items="flex_start",
-                                            mt="1em",
-                                            spacing="1",
-                                        ),
-                                        width="100%",
+                    rx.heading("Pregunta en desarrollo...", size="5", mb="1.5em"),
+                    rx.text("La funcionalidad de evaluaciones está siendo optimizada.", color="gray.500"),
+                    width="100%",
+                    spacing="4"
+                ),
+                rx.text("Cargando pregunta...", color="gray.500")
+            ),
+            
+            # Botones de navegación
+            rx.hstack(
+                rx.button(
+                    "Anterior", 
+                    variant="outline", 
+                    size="2",
+                    is_disabled=True
+                ),
+                rx.spacer(),
+                rx.button(
+                    "Siguiente", 
+                    size="2", 
+                    color_scheme=PRIMARY_COLOR_SCHEME,
+                    is_disabled=True
+                ),
+                width="100%",
+                mt="2em"
+            ),
+            
+            width="100%",
+            spacing="4",
+            padding="2em"
+        ),
+        variant="surface",
+        width="100%",
+        max_width="800px"
+    )
                                     ),
                                 ),
                                 # Sección de Explicación (en modo revisión)
