@@ -11,8 +11,8 @@ config = rx.Config(
     backend_host="0.0.0.0",
     backend_port=port,
     frontend_port=port,
-    # Modo producción para Railway
-    env=rx.Env.PROD,
+    # Modo desarrollo para Railway (evita production build pesado)
+    env=rx.Env.DEV,
     # Deshabilitar tailwind para eliminar warning
     tailwind=None,
 )

@@ -25,9 +25,9 @@ def setup_environment():
     os.environ["REFLEX_BACKEND_HOST"] = host
     
     # Configuraciones ultra-agresivas de memoria
-    os.environ["NODE_OPTIONS"] = "--max-old-space-size=200"
-    os.environ["NODE_ENV"] = "production"
-    os.environ["REFLEX_ENV"] = "prod"  # Modo producción
+    os.environ["NODE_OPTIONS"] = "--max-old-space-size=300"  # Incrementar un poco
+    os.environ["NODE_ENV"] = "development"  # Forzar desarrollo
+    os.environ["REFLEX_ENV"] = "dev"  # Modo desarrollo para evitar build pesado
     
     # Prevenir builds pesados y conflictos
     os.environ["NEXT_TELEMETRY_DISABLED"] = "1"
@@ -79,7 +79,7 @@ def start_with_fallback():
             "--backend-host", host,
             "--backend-port", port,
             "--frontend-port", port,  # Explícitamente mismo puerto
-            "--env", "prod"  # Usar prod para Railway
+            "--env", "dev"  # Usar dev para evitar production build pesado
         ]
         print(f"Executing: {' '.join(cmd)}")
         
@@ -96,7 +96,7 @@ def start_with_fallback():
                 sys.executable, "-m", "reflex", "run",
                 "--backend-host", host,
                 "--backend-port", port,
-                "--env", "prod"
+                "--env", "dev"  # Fallback también en dev
             ]
             print(f"Executing: {' '.join(cmd)}")
             os.execv(sys.executable, cmd)
