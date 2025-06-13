@@ -64,6 +64,58 @@ class EvaluationState(rx.State):
         total = len(self.eval_preguntas)
         if total == 0: return 0
         return int(min(100, max(0, ((self.eval_current_idx + 1) / total) * 100)))
+    
+    def generate_evaluation(self):
+        """Método para generar una nueva evaluación."""
+        try:
+            # Resetear estado
+            self.eval_error_message = ""
+            self.is_generation_in_progress = True
+            
+            # Generar preguntas de ejemplo (por ahora simplificado)
+            self.eval_preguntas = [
+                {
+                    "id": 1,
+                    "pregunta": "¿Cuál es la capital de Chile?",
+                    "tipo": "seleccion_unica",
+                    "opciones": [
+                        {"id": "a", "texto": "Santiago"},
+                        {"id": "b", "texto": "Valparaíso"},
+                        {"id": "c", "texto": "Concepción"},
+                        {"id": "d", "texto": "La Serena"}
+                    ],
+                    "respuesta_correcta": "a",
+                    "explicacion": "Santiago es la capital y ciudad más poblada de Chile."
+                },
+                {
+                    "id": 2,
+                    "pregunta": "¿Cuántos continentes hay en el mundo?",
+                    "tipo": "seleccion_unica",
+                    "opciones": [
+                        {"id": "a", "texto": "5"},
+                        {"id": "b", "texto": "6"},
+                        {"id": "c", "texto": "7"},
+                        {"id": "d", "texto": "8"}
+                    ],
+                    "respuesta_correcta": "c",
+                    "explicacion": "Existen 7 continentes: Asia, África, América del Norte, América del Sur, Europa, Oceanía y Antártida."
+                }
+            ]
+            
+            # Activar evaluación
+            self.eval_current_idx = 0
+            self.eval_user_answers = {}
+            self.eval_total_q = len(self.eval_preguntas)
+            self.eval_timer_seconds = 300  # 5 minutos
+            self.eval_timer_active = True
+            self.eval_timer_paused = False
+            self.is_eval_active = True
+            self.is_generation_in_progress = False
+            self.show_result_modal = False
+            
+        except Exception as e:
+            self.eval_error_message = f"Error al generar evaluación: {str(e)}"
+            self.is_generation_in_progress = False
 
 # Importar el módulo CuestionarioState para cuestionarios
 from .cuestionario import CuestionarioState, cuestionario_tab_content
@@ -1944,13 +1996,6 @@ def libros_tab():
                                         width="50%",
                                     ),
                                     
-                                    # Botón 2: Crear Mapa
-                                    rx.link(
-                                        rx.button(
-                                            rx.vstack(
-                                                rx.icon("map", mb="0.3em"),
-                                                rx.text("Crear", font_size="0.9em"),
-                                                rx.text("Mapa", font_size="0.9em"),
                                                 spacing="0",
                                                 justify="center",
                                                 align_items="center",
