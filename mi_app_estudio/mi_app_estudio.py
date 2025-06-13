@@ -118,11 +118,11 @@ class EvaluationState(rx.State):
             self.is_generation_in_progress = False
 
 # Importar el módulo CuestionarioState para cuestionarios
-from .cuestionario import CuestionarioState, cuestionario_tab_content
+from mi_app_estudio.cuestionario import CuestionarioState, cuestionario_tab_content
 # Importar componentes optimizados para mensajes de revisión
-from .review_components import mensaje_respuesta_correcta, mensaje_respuesta_incorrecta
+from mi_app_estudio.review_components import mensaje_respuesta_correcta, mensaje_respuesta_incorrecta
 
-from .state import AppState, PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME, GOOGLE_FONT_STYLESHEET, FONT_FAMILY, error_callout # Importa AppState y constantes/helpers necesarios desde state.py
+from mi_app_estudio.state import AppState, PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME, GOOGLE_FONT_STYLESHEET, FONT_FAMILY, error_callout # Importa AppState y constantes/helpers necesarios desde state.py
 
 # --- FUNCIÓN SIMPLIFICADA PARA MOSTRAR LAS PREGUNTAS ACTIVAS ---
 def vista_pregunta_activa():

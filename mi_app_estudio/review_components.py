@@ -4,7 +4,7 @@ Contains UI components for showing review feedback messages.
 """
 
 import reflex as rx
-from .state import PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME
+from mi_app_estudio.state import PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME
 
 
 def mensaje_respuesta_correcta():

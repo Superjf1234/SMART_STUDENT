@@ -5,7 +5,7 @@ from typing import Dict, List, Any, Optional
 # Importaciones relativas
 # Asegúrate de que AppState, config_logic, eval_logic, db_logic, error_callout,
 # PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME están definidos y accesibles en state.py
-from .state import AppState, BACKEND_AVAILABLE, config_logic, eval_logic, db_logic, error_callout, PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME
+from mi_app_estudio.state import AppState, BACKEND_AVAILABLE, config_logic, eval_logic, db_logic, error_callout, PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME
 import asyncio
 import traceback
 import random

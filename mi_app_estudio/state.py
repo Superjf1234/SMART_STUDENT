@@ -10,8 +10,8 @@ import reflex as rx
 import sys, os, datetime, traceback, re
 from typing import Dict, List, Optional, Set, Union, Any
 import random
-from .translations import get_translations
-from .help_translations import get_help_questions
+from mi_app_estudio.translations import get_translations
+from mi_app_estudio.help_translations import get_help_questions
 
 # --- IMPORTACIONES EXTERNAS Y BACKEND ---
 # ¡NO DEBE HABER importaciones de .evaluaciones ni de .state aquí!
@@ -302,7 +302,7 @@ def get_safe_var_list(var_list, default=None):
 # --- IMPORTACIONES DE SUB-ESTADOS ---
 # Importar CuestionarioState para poder obtener su instancia
 try:
-    from .cuestionario import CuestionarioState
+    from mi_app_estudio.cuestionario import CuestionarioState
 except ImportError:
     CuestionarioState = None # Handle case where file might not exist yet
 
@@ -1245,7 +1245,7 @@ class AppState(rx.State):
 
             # Limpiar estado específico de evaluaciones si existe la clase
             try:
-                from .evaluaciones import EvaluationState
+                from mi_app_estudio.evaluaciones import EvaluationState
                 if tab_anterior == "evaluacion":
                     print("DEBUG: Reseteando EvaluationState...")
                     eval_substate = await self.get_state(EvaluationState)
@@ -2691,7 +2691,7 @@ class AppState(rx.State):
     async def download_cuestionario_pdf(self):
         """Descarga el cuestionario actual en formato PDF"""
         # Importamos solo cuando se necesita para evitar dependencias circulares
-        from .cuestionario import CuestionarioState
+        from mi_app_estudio.cuestionario import CuestionarioState
         
         print("DEBUG: Iniciando download_cuestionario_pdf...")
         

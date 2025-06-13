@@ -3,7 +3,7 @@
 import reflex as rx
 from typing import Dict, List, Set, Union, Any, Optional
 # Importaciones relativas (asegúrate que sean correctas)
-from .state import AppState, BACKEND_AVAILABLE, config_logic, eval_logic, db_logic, error_callout, PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME
+from mi_app_estudio.state import AppState, BACKEND_AVAILABLE, config_logic, eval_logic, db_logic, error_callout, PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME
 import asyncio # Necesario para sleep
 import traceback
 import random

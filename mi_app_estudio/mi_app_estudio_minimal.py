@@ -3,7 +3,7 @@ Aplicación SMART_STUDENT - Versión Minimal para Railway
 """
 
 import reflex as rx
-from .state import AppState, PRIMARY_COLOR_SCHEME, error_callout
+from mi_app_estudio.state import AppState, PRIMARY_COLOR_SCHEME, error_callout
 
 # Crear una clase EvaluationState simplificada temporal
 class EvaluationState(AppState):
