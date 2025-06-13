@@ -45,5 +45,5 @@ ENV NODE_OPTIONS="--max-old-space-size=256"
 ENV BUN_CONFIG_NO_CLEAR_TERMINAL=true
 ENV PYTHONUNBUFFERED=1
 
-# Comando para ejecutar la aplicación (Railway usará Procfile si existe)
-CMD ["python", "ultra_simple_start.py"]
+# Comando para ejecutar la aplicación
+CMD ["python", "railway_start.py"]

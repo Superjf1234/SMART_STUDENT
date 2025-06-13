@@ -9,7 +9,7 @@ import time
 
 def setup_environment():
     """Configurar variables de entorno optimizadas para Railway."""
-    print("=== RAILWAY DEPLOYMENT - ULTRA ROBUST START ===")
+    print("=== RAILWAY DEPLOYMENT - ULTRA ROBUST START (FIXED) ===")
     
     # Variables de entorno críticas
     os.environ["PORT"] = os.environ.get("PORT", "8080")
@@ -19,17 +19,17 @@ def setup_environment():
     # Configuraciones ultra-agresivas de memoria
     os.environ["NODE_OPTIONS"] = "--max-old-space-size=200"
     os.environ["NODE_ENV"] = "development"
-    os.environ["REFLEX_ENV"] = "development"
+    os.environ["REFLEX_ENV"] = "dev"  # Cambiar a 'dev' para consistencia
     
     # Prevenir builds pesados
     os.environ["NEXT_TELEMETRY_DISABLED"] = "1"
-    os.environ["REFLEX_SKIP_COMPILE"] = "1"
     
     print(f"PORT: {os.environ['PORT']}")
     print(f"HOST: {os.environ['HOST']}")
     print(f"PYTHONPATH: {os.environ['PYTHONPATH']}")
     print(f"NODE_OPTIONS: {os.environ['NODE_OPTIONS']}")
     print(f"REFLEX_ENV: {os.environ['REFLEX_ENV']}")
+    print(f"Working directory: {os.getcwd()}")  # Mostrar directorio actual
 
 def test_import():
     """Probar importación del módulo principal."""
@@ -53,14 +53,17 @@ def start_with_fallback():
     port = os.environ["PORT"]
     host = os.environ["HOST"]
     
-    # Estrategia 1: Inicio normal con desarrollo forzado
+    # CRITICAL FIX: NO cambiar de directorio - rxconfig.py está en /app
+    print(f"Staying in root directory: {os.getcwd()}")
+    
+    # Estrategia 1: Inicio normal con desarrollo forzado (SIN cambio de directorio)
     try:
-        print("STRATEGY 1: Normal development start...")
+        print("STRATEGY 1: Normal development start (staying in root)...")
         cmd = [
             sys.executable, "-m", "reflex", "run",
             "--backend-host", host,
             "--backend-port", port,
-            "--env", "dev"  # Usar --env dev en lugar de --dev
+            "--env", "dev"  # Usar dev para evitar build pesado
         ]
         print(f"Executing: {' '.join(cmd)}")
         os.execvpe(sys.executable, cmd, os.environ)
@@ -81,25 +84,8 @@ def start_with_fallback():
     except Exception as e:
         print(f"Strategy 2 failed: {e}")
     
-    # Estrategia 3: Servidor Python directo
-    print("STRATEGY 3: Direct Python server...")
-    try:
-        # Importar y crear la app directamente
-        sys.path.insert(0, "/app")
-        sys.path.insert(0, "/app/mi_app_estudio")
-        
-        import mi_app_estudio.mi_app_estudio as app_module
-        
-        # Iniciar servidor HTTP simple
-        from http.server import HTTPServer, SimpleHTTPRequestHandler
-        server = HTTPServer((host, int(port)), SimpleHTTPRequestHandler)
-        print(f"Direct server starting on {host}:{port}")
-        server.serve_forever()
-        
-    except Exception as e:
-        print(f"Strategy 3 failed: {e}")
-        print("All strategies failed. Exiting.")
-        sys.exit(1)
+    print("All strategies failed. Exiting.")
+    sys.exit(1)
 
 if __name__ == "__main__":
     start_with_fallback()
