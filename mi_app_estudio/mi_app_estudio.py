@@ -1996,6 +1996,13 @@ def libros_tab():
                                         width="50%",
                                     ),
                                     
+                                    # Botón 2: Crear Mapa
+                                    rx.link(
+                                        rx.button(
+                                            rx.vstack(
+                                                rx.icon("map", mb="0.3em"),
+                                                rx.text("Crear", font_size="0.9em"),
+                                                rx.text("Mapa", font_size="0.9em"),
                                                 spacing="0",
                                                 justify="center",
                                                 align_items="center",
