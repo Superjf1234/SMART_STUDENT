@@ -65,27 +65,22 @@ def start_with_fallback():
     # CRITICAL FIX: NO cambiar de directorio - rxconfig.py está en /app
     print(f"Staying in root directory: {os.getcwd()}")
     
-    # STRATEGY CRÍTICO: Puertos completamente separados para evitar conflicto
+    # STRATEGY CRÍTICO: Solo backend que sirve frontend automáticamente
     try:
-        print("STRATEGY: Separate ports to avoid conflicts...")
-        
-        # Frontend en puerto interno diferente
-        frontend_port = str(int(port) + 1000)  # 9080
+        print("STRATEGY: Backend serves frontend automatically...")
         
         # Variables de entorno específicas
         os.environ["REFLEX_BACKEND_PORT"] = port
-        os.environ["REFLEX_FRONTEND_PORT"] = frontend_port  # Puerto DIFERENTE
         os.environ["REFLEX_BACKEND_HOST"] = host
         
-        print(f"Backend port: {port} (public)")
-        print(f"Frontend port: {frontend_port} (internal)")
+        print(f"Unified server port: {port}")
         
         cmd = [
             sys.executable, "-m", "reflex", "run",
             "--backend-host", host,
             "--backend-port", port,
-            "--frontend-port", frontend_port,  # Puerto diferente
             "--env", "dev"
+            # NO especificar --frontend-port
         ]
         print(f"Executing: {' '.join(cmd)}")
         
@@ -93,11 +88,17 @@ def start_with_fallback():
         os.execv(sys.executable, cmd)
         
     except Exception as e:
-        print(f"Separate ports failed: {e}")
+        print(f"Unified server failed: {e}")
         
-        # Fallback: Solo especificar backend
+        # Fallback: Intentar export y luego serve
         try:
-            print("FALLBACK: Backend-only specification...")
+            print("FALLBACK: Export and serve static...")
+            
+            # Primero hacer export
+            export_cmd = [sys.executable, "-m", "reflex", "export"]
+            subprocess.run(export_cmd, timeout=60)
+            
+            # Luego servir
             cmd = [
                 sys.executable, "-m", "reflex", "run",
                 "--backend-host", host,
