@@ -1,1 +1,1 @@
-web: python railway_exec.py
+web: python railway_direct.py

@@ -65,38 +65,44 @@ def start_with_fallback():
     # CRITICAL FIX: NO cambiar de directorio - rxconfig.py está en /app
     print(f"Staying in root directory: {os.getcwd()}")
     
-    # STRATEGY ÚNICO: Usar exec directo para evitar conflictos de proceso
+    # STRATEGY CRÍTICO: Puertos completamente separados para evitar conflicto
     try:
-        print("STRATEGY: Direct exec with unified ports...")
+        print("STRATEGY: Separate ports to avoid conflicts...")
         
-        # Variables de entorno específicas para evitar conflictos
+        # Frontend en puerto interno diferente
+        frontend_port = str(int(port) + 1000)  # 9080
+        
+        # Variables de entorno específicas
         os.environ["REFLEX_BACKEND_PORT"] = port
-        os.environ["REFLEX_FRONTEND_PORT"] = port  # MISMO puerto
+        os.environ["REFLEX_FRONTEND_PORT"] = frontend_port  # Puerto DIFERENTE
         os.environ["REFLEX_BACKEND_HOST"] = host
+        
+        print(f"Backend port: {port} (public)")
+        print(f"Frontend port: {frontend_port} (internal)")
         
         cmd = [
             sys.executable, "-m", "reflex", "run",
             "--backend-host", host,
             "--backend-port", port,
-            "--frontend-port", port,  # Explícitamente mismo puerto
-            "--env", "dev"  # Usar dev para evitar production build pesado
+            "--frontend-port", frontend_port,  # Puerto diferente
+            "--env", "dev"
         ]
         print(f"Executing: {' '.join(cmd)}")
         
-        # Usar exec directo - esto reemplaza el proceso actual completamente
+        # Usar exec directo
         os.execv(sys.executable, cmd)
         
     except Exception as e:
-        print(f"Direct exec failed: {e}")
+        print(f"Separate ports failed: {e}")
         
-        # Fallback: Intentar sin frontend-port especificado
+        # Fallback: Solo especificar backend
         try:
-            print("FALLBACK: Standard reflex run...")
+            print("FALLBACK: Backend-only specification...")
             cmd = [
                 sys.executable, "-m", "reflex", "run",
                 "--backend-host", host,
                 "--backend-port", port,
-                "--env", "dev"  # Fallback también en dev
+                "--env", "dev"
             ]
             print(f"Executing: {' '.join(cmd)}")
             os.execv(sys.executable, cmd)
