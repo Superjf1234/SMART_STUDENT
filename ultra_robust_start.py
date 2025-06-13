@@ -9,25 +9,34 @@ import time
 
 def setup_environment():
     """Configurar variables de entorno optimizadas para Railway."""
-    print("=== RAILWAY DEPLOYMENT - ULTRA ROBUST START (FIXED) ===")
+    print("=== RAILWAY DEPLOYMENT - ULTRA ROBUST START (PORT-UNIFIED) ===")
     
     # Variables de entorno críticas
-    os.environ["PORT"] = os.environ.get("PORT", "8080")
-    os.environ["HOST"] = "0.0.0.0"
+    port = os.environ.get("PORT", "8080")
+    host = "0.0.0.0"
+    
+    os.environ["PORT"] = port
+    os.environ["HOST"] = host
     os.environ["PYTHONPATH"] = "/app:/app/mi_app_estudio"
+    
+    # CRÍTICO: Configuraciones para unificar puertos
+    os.environ["REFLEX_BACKEND_PORT"] = port
+    os.environ["REFLEX_FRONTEND_PORT"] = port  # MISMO puerto
+    os.environ["REFLEX_BACKEND_HOST"] = host
     
     # Configuraciones ultra-agresivas de memoria
     os.environ["NODE_OPTIONS"] = "--max-old-space-size=200"
-    os.environ["NODE_ENV"] = "development"
-    os.environ["REFLEX_ENV"] = "dev"  # Cambiar a 'dev' para consistencia
+    os.environ["NODE_ENV"] = "production"
+    os.environ["REFLEX_ENV"] = "prod"  # Modo producción
     
-    # Prevenir builds pesados
+    # Prevenir builds pesados y conflictos
     os.environ["NEXT_TELEMETRY_DISABLED"] = "1"
     
-    print(f"PORT: {os.environ['PORT']}")
-    print(f"HOST: {os.environ['HOST']}")
+    print(f"PORT (unified): {port}")
+    print(f"HOST: {host}")
     print(f"PYTHONPATH: {os.environ['PYTHONPATH']}")
-    print(f"NODE_OPTIONS: {os.environ['NODE_OPTIONS']}")
+    print(f"REFLEX_BACKEND_PORT: {os.environ['REFLEX_BACKEND_PORT']}")
+    print(f"REFLEX_FRONTEND_PORT: {os.environ['REFLEX_FRONTEND_PORT']}")
     print(f"REFLEX_ENV: {os.environ['REFLEX_ENV']}")
     print(f"Working directory: {os.getcwd()}")  # Mostrar directorio actual
 
@@ -56,33 +65,44 @@ def start_with_fallback():
     # CRITICAL FIX: NO cambiar de directorio - rxconfig.py está en /app
     print(f"Staying in root directory: {os.getcwd()}")
     
-    # Estrategia 1: Inicio normal con desarrollo forzado (SIN cambio de directorio)
+    # STRATEGY ÚNICO: Usar exec directo para evitar conflictos de proceso
     try:
-        print("STRATEGY 1: Normal development start (staying in root)...")
+        print("STRATEGY: Direct exec with unified ports...")
+        
+        # Variables de entorno específicas para evitar conflictos
+        os.environ["REFLEX_BACKEND_PORT"] = port
+        os.environ["REFLEX_FRONTEND_PORT"] = port  # MISMO puerto
+        os.environ["REFLEX_BACKEND_HOST"] = host
+        
         cmd = [
             sys.executable, "-m", "reflex", "run",
             "--backend-host", host,
             "--backend-port", port,
-            "--env", "dev"  # Usar dev para evitar build pesado
+            "--frontend-port", port,  # Explícitamente mismo puerto
+            "--env", "prod"  # Usar prod para Railway
         ]
         print(f"Executing: {' '.join(cmd)}")
-        os.execvpe(sys.executable, cmd, os.environ)
+        
+        # Usar exec directo - esto reemplaza el proceso actual completamente
+        os.execv(sys.executable, cmd)
+        
     except Exception as e:
-        print(f"Strategy 1 failed: {e}")
-    
-    # Estrategia 2: Inicio sin frontend (solo backend)
-    try:
-        print("STRATEGY 2: Backend-only start...")
-        cmd = [
-            sys.executable, "-m", "reflex", "run",
-            "--backend-only",
-            "--backend-host", host,
-            "--backend-port", port
-        ]
-        print(f"Executing: {' '.join(cmd)}")
-        os.execvpe(sys.executable, cmd, os.environ)
-    except Exception as e:
-        print(f"Strategy 2 failed: {e}")
+        print(f"Direct exec failed: {e}")
+        
+        # Fallback: Intentar sin frontend-port especificado
+        try:
+            print("FALLBACK: Standard reflex run...")
+            cmd = [
+                sys.executable, "-m", "reflex", "run",
+                "--backend-host", host,
+                "--backend-port", port,
+                "--env", "prod"
+            ]
+            print(f"Executing: {' '.join(cmd)}")
+            os.execv(sys.executable, cmd)
+            
+        except Exception as e2:
+            print(f"Fallback also failed: {e2}")
     
     print("All strategies failed. Exiting.")
     sys.exit(1)
