@@ -1,20 +1,18 @@
 import reflex as rx
 import os
 
-# Configuración para Railway - Backend sirve todo
+# Configuración optimizada para Railway
 port = int(os.environ.get("PORT", "8080"))
 
-# CRÍTICO: Cuando ejecutamos desde /app/mi_app_estudio, 
-# el app_name debe ser solo "mi_app_estudio" (el archivo .py)
 config = rx.Config(
-    app_name="mi_app_estudio",  # Archivo mi_app_estudio.py en el directorio actual
+    app_name="mi_app_estudio",  # Nombre del módulo sin dots
     title="Smart Student",
-    # Configuración para Railway - un solo puerto
+    # Configuración unificada para Railway
     backend_host="0.0.0.0",
     backend_port=port,
-    # NO especificar frontend_port - que Reflex use el mismo
+    # No especificar frontend_port - usar el mismo puerto
     # Modo desarrollo para Railway
     env=rx.Env.DEV,
-    # Deshabilitar tailwind para eliminar warning
+    # Deshabilitar tailwind para eliminar warnings
     tailwind=None,
 )
