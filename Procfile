@@ -1,1 +1,1 @@
-web: python railway_root_strategy.py
+web: python railway_simple_new.py
