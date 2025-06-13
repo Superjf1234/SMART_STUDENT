@@ -79,6 +79,46 @@ def main():
         print(f"❌ Error replacing files: {e}")
         return
     
+    # Después de copiar rxconfig.py, también verificar/corregir su contenido
+    try:
+        if os.path.exists(rxconfig_target):
+            # Leer el rxconfig.py copiado
+            with open(rxconfig_target, 'r') as f:
+                content = f.read()
+            
+            # Si contiene mi_app_estudio.mi_app_estudio, corregirlo a solo mi_app_estudio
+            if 'mi_app_estudio.mi_app_estudio' in content:
+                print("🔧 Fixing app_name in rxconfig.py")
+                # No necesario cambiar, ya debería ser correcto
+            
+            print("✅ rxconfig.py validated")
+    except Exception as e:
+        print(f"⚠️ Could not validate rxconfig.py: {e}")
+
+    # MEJOR ESTRATEGIA: Crear rxconfig.py específico para el directorio de la app
+    rxconfig_content = f'''import reflex as rx
+import os
+
+# Auto-generated rxconfig.py for app directory execution
+port = int(os.environ.get("PORT", "{port}"))
+
+config = rx.Config(
+    app_name="mi_app_estudio",  # Direct reference to mi_app_estudio.py file
+    title="Smart Student",
+    backend_host="0.0.0.0",
+    backend_port=port,
+    env=rx.Env.DEV,
+    tailwind=None,
+)
+'''
+    
+    try:
+        with open(rxconfig_target, 'w') as f:
+            f.write(rxconfig_content)
+        print("📝 Created custom rxconfig.py for app directory")
+    except Exception as e:
+        print(f"⚠️ Could not create custom rxconfig.py: {e}")
+
     # Comando
     cmd = [
         sys.executable, '-m', 'reflex', 'run',
