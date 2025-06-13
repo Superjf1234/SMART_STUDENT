@@ -23,21 +23,31 @@ def main():
     os.environ["GEMINI_API_KEY"] = "AIzaSyAOkMCAA84tHALCkCPskyV0jFKnBz2pSiA"
     print("🔑 GEMINI_API_KEY configurado")
     
-    # Estrategia: Probar diferentes directorios
-    app_paths = ['/app/mi_app_estudio', '/app']
+    # NUEVA ESTRATEGIA: Siempre ejecutar desde el directorio raíz
+    # donde está rxconfig.py, pero verificar que la app existe
+    base_path = '/app'
+    app_path = '/app/mi_app_estudio'
     
-    for app_path in app_paths:
-        if os.path.exists(app_path):
-            os.chdir(app_path)
-            print(f"📁 Working dir: {os.getcwd()}")
-            
-            # Verificar archivos necesarios
-            if os.path.exists('mi_app_estudio.py') or os.path.exists('mi_app_estudio/mi_app_estudio.py'):
-                print("✅ App files found")
-                break
-            elif os.path.exists('rxconfig.py'):
-                print("✅ Reflex config found")
-                break
+    # Verificar que los archivos necesarios existen
+    rxconfig_exists = os.path.exists(f'{base_path}/rxconfig.py')
+    app_exists = os.path.exists(f'{app_path}/mi_app_estudio.py')
+    
+    print(f"📁 Base path: {base_path}")
+    print(f"📁 App path: {app_path}")
+    print(f"✅ rxconfig.py exists: {rxconfig_exists}")
+    print(f"✅ mi_app_estudio.py exists: {app_exists}")
+    
+    if not rxconfig_exists:
+        print("❌ rxconfig.py not found in base path")
+        return
+    
+    if not app_exists:
+        print("❌ mi_app_estudio.py not found in app path")
+        return
+    
+    # CRÍTICO: Cambiar al directorio base donde está rxconfig.py
+    os.chdir(base_path)
+    print(f"📁 Working dir: {os.getcwd()}")
     
     # Comando simple - dejar que Reflex maneje los imports
     cmd = [
