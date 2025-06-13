@@ -7,6 +7,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     curl \
     git \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar Node.js (requerido por Reflex)
@@ -32,4 +33,4 @@ ENV PORT=8080
 EXPOSE 8080
 
 # Comando de inicio
-CMD ["python", "railway_debug.py"]
+CMD ["python", "railway_simple.py"]

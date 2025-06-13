@@ -10,4 +10,6 @@ config = rx.Config(
     backend_port=int(os.environ.get("PORT", "8080")),
     # Modo dev para evitar compilación pesada
     env=rx.Env.DEV,
+    # Deshabilitar tailwind para eliminar warning
+    tailwind=None,
 )

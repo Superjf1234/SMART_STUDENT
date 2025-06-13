@@ -1,1 +1,1 @@
-web: python railway_debug.pyy
+web: python railway_simple.pyy
