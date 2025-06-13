@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-RAILWAY DIRECT - REESCRITO PARA IMPORTS RELATIVOS
+RAILWAY DIRECT - COPY CONFIG STRATEGY
 """
 
 import os
 import sys
+import shutil
 
 def main():
-    """NUEVA ESTRATEGIA: Sin imports complejos, dejar que Reflex maneje todo"""
+    """STRATEGY: Copy rxconfig.py to working directory"""
     
-    print("🔄 RAILWAY DIRECT - NUEVA ESTRATEGIA")
+    print("� RAILWAY DIRECT - COPY CONFIG")
     print("=" * 50)
     
     # Configuración básica
@@ -23,33 +24,41 @@ def main():
     os.environ["GEMINI_API_KEY"] = "AIzaSyAOkMCAA84tHALCkCPskyV0jFKnBz2pSiA"
     print("🔑 GEMINI_API_KEY configurado")
     
-    # NUEVA ESTRATEGIA: Siempre ejecutar desde el directorio raíz
-    # donde está rxconfig.py, pero verificar que la app existe
+    # Paths
     base_path = '/app'
     app_path = '/app/mi_app_estudio'
     
-    # Verificar que los archivos necesarios existen
-    rxconfig_exists = os.path.exists(f'{base_path}/rxconfig.py')
-    app_exists = os.path.exists(f'{app_path}/mi_app_estudio.py')
+    print(f"📁 Base: {base_path}")
+    print(f"📁 App: {app_path}")
     
-    print(f"📁 Base path: {base_path}")
-    print(f"📁 App path: {app_path}")
-    print(f"✅ rxconfig.py exists: {rxconfig_exists}")
-    print(f"✅ mi_app_estudio.py exists: {app_exists}")
+    # STRATEGY: Copy rxconfig.py to app directory and run from there
+    try:
+        # Check if rxconfig.py exists in base
+        if os.path.exists(f'{base_path}/rxconfig.py'):
+            print("✅ rxconfig.py found in base")
+            
+            # Copy to app directory
+            shutil.copy(f'{base_path}/rxconfig.py', f'{app_path}/rxconfig.py')
+            print("📋 Copied rxconfig.py to app dir")
+            
+        else:
+            print("❌ rxconfig.py not found in base")
+        
+        # Always change to app directory
+        os.chdir(app_path)
+        print(f"📁 Working dir: {os.getcwd()}")
+        
+        # Verify rxconfig.py exists
+        if os.path.exists('rxconfig.py'):
+            print("✅ rxconfig.py available")
+        else:
+            print("⚠️ rxconfig.py not available, but continuing...")
+            
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        # Continue anyway
     
-    if not rxconfig_exists:
-        print("❌ rxconfig.py not found in base path")
-        return
-    
-    if not app_exists:
-        print("❌ mi_app_estudio.py not found in app path")
-        return
-    
-    # CRÍTICO: Cambiar al directorio base donde está rxconfig.py
-    os.chdir(base_path)
-    print(f"📁 Working dir: {os.getcwd()}")
-    
-    # Comando simple - dejar que Reflex maneje los imports
+    # Command
     cmd = [
         sys.executable, '-m', 'reflex', 'run',
         '--backend-host', host,
@@ -57,9 +66,8 @@ def main():
     ]
     
     print(f"🚀 Command: {' '.join(cmd)}")
-    print("Letting Reflex auto-discover and handle imports...")
     
-    # Ejecutar
+    # Execute
     os.execv(sys.executable, cmd)
 
 if __name__ == "__main__":

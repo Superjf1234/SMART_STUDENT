@@ -22,8 +22,39 @@ def main():
     os.environ["GEMINI_API_KEY"] = "AIzaSyAOkMCAA84tHALCkCPskyV0jFKnBz2pSiA"
     print("🔑 GEMINI_API_KEY configurado")
     
-    # Cambiar al directorio de la app
+    # NUEVA ESTRATEGIA: Copiar rxconfig.py al directorio donde estamos ejecutando
+    # O cambiar al directorio raíz - LO QUE SEA NECESARIO PARA QUE FUNCIONE
     app_path = '/app/mi_app_estudio'
+    root_path = '/app'
+    
+    print(f"📁 App path: {app_path}")
+    print(f"📁 Root path: {root_path}")
+    
+    # Verificar si rxconfig.py existe en root
+    rxconfig_source = f"{root_path}/rxconfig.py"
+    rxconfig_target = f"{app_path}/rxconfig.py"
+    
+    if os.path.exists(rxconfig_source):
+        print("✅ Found rxconfig.py in root")
+        
+        # OPCIÓN 1: Copiar rxconfig.py al directorio de la app
+        try:
+            shutil.copy(rxconfig_source, rxconfig_target)
+            print("📋 Copied rxconfig.py to app directory")
+        except Exception as e:
+            print(f"⚠️ Could not copy rxconfig.py: {e}")
+            
+            # OPCIÓN 2: Cambiar al directorio raíz en su lugar
+            print("🔄 Changing to root directory instead")
+            os.chdir(root_path)
+            print(f"📁 Working dir changed to: {os.getcwd()}")
+            
+            # No reemplazar archivos si estamos en root
+            return
+    else:
+        print("❌ rxconfig.py not found in root")
+    
+    # Continuar en el directorio de la app
     os.chdir(app_path)
     print(f"📁 Working dir: {os.getcwd()}")
     
