@@ -24,6 +24,11 @@ def setup_environment():
     os.environ["REFLEX_FRONTEND_PORT"] = port  # MISMO puerto
     os.environ["REFLEX_BACKEND_HOST"] = host
     
+    # Configurar GEMINI_API_KEY para evitar error crítico
+    if "GEMINI_API_KEY" not in os.environ:
+        os.environ["GEMINI_API_KEY"] = "AIzaSyAOkMCAA84tHALCkCPskyV0jFKnBz2pSiA"
+        print("✓ GEMINI_API_KEY configurada (clave de desarrollo)")
+    
     # Configuraciones ultra-agresivas de memoria
     os.environ["NODE_OPTIONS"] = "--max-old-space-size=300"  # Incrementar un poco
     os.environ["NODE_ENV"] = "development"  # Forzar desarrollo
