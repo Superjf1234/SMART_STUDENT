@@ -144,7 +144,8 @@ def main():
         print("❌ No se pudo aplicar la corrección general")
     
     print("\nEjecutando la aplicación Reflex para Railway...")
-    os.system("reflex init && reflex run --env prod --backend-only")
+    # CORREGIDO: Comando sin flags problemáticos
+    os.system("reflex init && reflex run --backend-host 0.0.0.0 --backend-port 8080")
 
 if __name__ == "__main__":
     main()
