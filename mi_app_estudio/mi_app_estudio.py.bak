@@ -39,22 +39,22 @@ def vista_pregunta_activa():
 
                 # --- SI EL ÍNDICE ES VÁLIDO Y LA PREGUNTA EXISTE ---
                 rx.vstack(
-                    # Usamos .get() con default por si acaso la clave falta
+                    # Acceso directo a la clave (sin .get() para evitar VarAttributeError)
                     rx.heading(
-                        EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("pregunta", "Error al cargar pregunta"),
+                        EvaluationState.eval_preguntas[EvaluationState.eval_current_idx]["pregunta"],
                         size="5", mb="1.5em", text_align="left", width="100%"
                     ),
 
                     # Opciones - CORREGIDO para manejar verdadero_falso con un grupo de radio vertical
                     rx.cond(
-                        # Usamos .get() también para el tipo
-                        EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "verdadero_falso",
+                        # Acceso directo al tipo (sin .get() para evitar VarAttributeError)
+                        EvaluationState.eval_preguntas[EvaluationState.eval_current_idx]["tipo"] == "verdadero_falso",
                           # SI ES VERDADERO/FALSO, usamos radio_group con orientación vertical (column)
                         rx.vstack(
                             rx.radio_group(
                                 ["Verdadero", "Falso"],  # Los items como lista directamente
                                 value=EvaluationState.current_radio_group_value,
-                                on_change=lambda value: EvaluationState.set_eval_answer(value.lower()),
+                                on_change=EvaluationState.set_eval_answer_by_text,
                                 size="2",                                width="100%",
                                 # Usamos 'column' en lugar de 'vertical'
                                 direction="column", 
@@ -143,8 +143,8 @@ def vista_pregunta_activa():
                         
                         # SI NO ES VERDADERO/FALSO, mantenemos el comportamiento original para otras opciones
                         rx.cond(
-                            (EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "opcion_multiple") |
-                            (EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "alternativas"),                            # --- CORRECCIÓN: Cambiamos cómo se crean las opciones de radio ---
+                            (EvaluationState.eval_preguntas[EvaluationState.eval_current_idx]["tipo"] == "opcion_multiple") |
+                            (EvaluationState.eval_preguntas[EvaluationState.eval_current_idx]["tipo"] == "alternativas"),                            # --- CORRECCIÓN: Cambiamos cómo se crean las opciones de radio ---
                             rx.vstack(
                                 rx.radio_group(
                                     # Definimos las opciones como una lista para radio_group
@@ -239,7 +239,7 @@ def vista_pregunta_activa():
 
                             # IMPLEMENTACIÓN PARA SELECCIÓN MÚLTIPLE
                             rx.cond(
-                                EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get("tipo") == "seleccion_multiple",
+                                EvaluationState.eval_preguntas[EvaluationState.eval_current_idx]["tipo"] == "seleccion_multiple",
                                   # Implementación para selección múltiple (varias respuestas posibles)
                                 rx.vstack(
                                     rx.text(
@@ -254,14 +254,7 @@ def vista_pregunta_activa():
                                             rx.checkbox(
                                                 # Corrección para evitar que las opciones aparezcan preseleccionadas
                                                 # Solo marcar como checked si el ID específicamente está en el conjunto de respuestas
-                                                is_checked=rx.cond(
-                                                    # Primero verificar si hay una respuesta guardada y es un conjunto (set)
-                                                    (EvaluationState.eval_user_answers.get(EvaluationState.eval_current_idx) != None),
-                                                    # Si hay respuesta, verificar si este ID específico está en el conjunto mediante un método seguro
-                                                    EvaluationState.check_if_option_selected(EvaluationState.eval_current_idx, opcion["id"]),
-                                                    # Si no hay respuesta, siempre devolver False (no seleccionado)
-                                                    False
-                                                ),
+                                                is_checked=EvaluationState.check_if_option_selected(EvaluationState.eval_current_idx, opcion["id"]),
                                                 on_change=lambda selected=None, opt_id=opcion["id"]: EvaluationState.toggle_multiple_answer(opt_id),
                                                 size="2",
                                                 is_disabled=EvaluationState.is_reviewing_eval,
@@ -358,7 +351,7 @@ def vista_pregunta_activa():
                                 
                                 # Mensaje para otros tipos de pregunta no implementados
                                 rx.text(
-                                    f"UI para tipo '{EvaluationState.eval_preguntas[EvaluationState.eval_current_idx].get('tipo', 'desconocido')}' no implementada.",
+                                    f"UI para tipo '{EvaluationState.eval_preguntas[EvaluationState.eval_current_idx]['tipo']}' no implementada.",
                                     color="gray"
                                 )
                             )
@@ -933,7 +926,7 @@ def login_page():
     # Añadimos los botones de idioma y modo oscuro en la parte superior derecha
     header_buttons = rx.hstack(
         rx.button(
-            rx.cond(AppState.current_language == "es", "ES", "EN"),
+            rx.cond(AppState.current_language == "es", rx.text("ES"), rx.text("EN")),
             variant="soft",
             size="2",
             on_click=AppState.toggle_language,
@@ -1295,8 +1288,8 @@ def resumen_tab():
                         ),
                         rx.cond(
                             AppState.current_language == "es",
-                            "Generar Resumen",
-                            "Generate Summary"
+                            rx.text("Generar Resumen"),
+                            rx.text("Generate Summary")
                         )
                     ),
                     on_click=AppState.generate_summary,
@@ -1508,8 +1501,8 @@ def mapa_tab():
                 rx.button(
                     rx.cond(
                         AppState.is_generating_mapa,
-                        rx.hstack(rx.spinner(size="2"), "Generando mapa..."),
-                        "Generar Mapa"
+                        rx.hstack(rx.spinner(size="2"), rx.text("Generando mapa...")),
+                        rx.text("Generar Mapa")
                     ),
                     on_click=AppState.generate_map,
                     size="3",
@@ -2564,7 +2557,7 @@ def main_dashboard():
         rx.heading("STUDENT", size="5", weight="light", color_scheme="gray"),
         rx.spacer(),
         rx.button(
-            rx.cond(AppState.current_language == "es", "ES", "EN"),
+            rx.cond(AppState.current_language == "es", rx.text("ES"), rx.text("EN")),
             variant="soft",
             size="2",
             on_click=AppState.toggle_language,
@@ -2672,8 +2665,8 @@ rx.Config.static_dir = "assets"
 rx.Config.title = "Smart Student | Aprende, Crea y Destaca"
 rx.Config.favicon = "/favicon.ico"
 
-@app.add_page
 def index() -> rx.Component:
+    """Página principal de la aplicación."""
     return rx.fragment(
         rx.script(
             "document.title = 'Smart Student | Aprende, Crea y Destaca'"
@@ -2681,3 +2674,6 @@ def index() -> rx.Component:
         rx.html('<link rel="icon" type="image/x-icon" href="/smartstudent_icon.ico">'),
         rx.cond(AppState.is_logged_in, main_dashboard(), login_page()),
     )
+
+# Agregar la página usando la sintaxis moderna de Reflex
+app.add_page(index, route="/", title="Smart Student | Aprende, Crea y Destaca")

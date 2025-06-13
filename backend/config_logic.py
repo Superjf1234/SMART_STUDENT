@@ -19,12 +19,11 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     print(
-        "⚠️ GEMINI_API_KEY no encontrada en variables de entorno, usando clave de desarrollo",
+        "ERROR CRITICO (config_logic): La variable de entorno GEMINI_API_KEY no está definida en el archivo .env",
         file=sys.stderr,
     )
-    # Usar clave de desarrollo como fallback para Railway
-    GEMINI_API_KEY = "AIzaSyAOkMCAA84tHALCkCPskyV0jFKnBz2pSiA"
-    print("✅ GEMINI_API_KEY configurada con fallback para Railway", file=sys.stderr)
+    # Considera lanzar un error si la API Key es esencial para iniciar
+    # raise ValueError("API Key de Gemini no encontrada en .env")
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"  # O la URL del modelo que prefieras
 
 # --- Estructura de Cursos y PDFs ---

@@ -35,17 +35,16 @@ def main():
     print(f"NODE_ENV: {os.environ['NODE_ENV']}")
     print(f"REFLEX_ENV: {os.environ['REFLEX_ENV']}")
     
-    # Ir al directorio de la aplicación
-    if os.path.exists('mi_app_estudio'):
-        os.chdir('mi_app_estudio')
-        print(f"Changed to: {os.getcwd()}")
-    else:
-        print("ERROR: mi_app_estudio directory not found")
-        return 1
+    # Stay in root directory where rxconfig.py is located
+    print(f"Working directory: {os.getcwd()}")
     
     # Verificar archivos críticos
-    if not os.path.exists('mi_app_estudio.py'):
+    if not os.path.exists('mi_app_estudio/mi_app_estudio.py'):
         print("ERROR: Main app file not found")
+        return 1
+    
+    if not os.path.exists('rxconfig.py'):
+        print("ERROR: rxconfig.py not found in root directory")
         return 1
     
     print("Starting Reflex in DEVELOPMENT mode (no production build)...")

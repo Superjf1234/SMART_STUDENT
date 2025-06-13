@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "python railway_emergency_fix.py",
+    "startCommand": "python start_railway.py",
     "healthcheckPath": "/",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
@@ -14,8 +14,8 @@
     "production": {
       "variables": {
         "PYTHONPATH": "/app",
-        "REFLEX_ENV": "prod",
-        "NODE_ENV": "production",
+        "REFLEX_ENV": "dev",
+        "NODE_ENV": "development",
         "GEMINI_API_KEY": "AIzaSyAOkMCAA84tHALCkCPskyV0jFKnBz2pSiA",
         "DEBUG": "False"
       }
