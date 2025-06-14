@@ -1,1 +1,1 @@
-web: python ultra_robust_start.py
+web: cd /app && python emergency_start_railway.py

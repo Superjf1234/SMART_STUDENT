@@ -1,0 +1,14 @@
+# Configuración de Nixpacks para Railway
+# Este archivo ayuda a personalizar el proceso de construcción
+
+[phases.setup]
+nixPkgs = ["nodejs", "python310", "git"]
+
+[phases.build]
+cmds = [
+  "pip install -r requirements.txt",
+  "mkdir -p /app/data /app/.web"
+]
+
+[start]
+cmd = "cd /app && python emergency_start_railway.py"

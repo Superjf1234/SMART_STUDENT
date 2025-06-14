@@ -40,11 +40,12 @@ COPY . .
 # Crear directorios necesarios que Reflex podría esperar
 RUN mkdir -p /app/data /app/.web
 
+# Hacer ejecutables los scripts de inicio
+RUN chmod +x /app/emergency_start_railway.py /app/ultra_robust_start.py
+
 # Exponer el puerto que Railway usará (inyectado por Railway)
 EXPOSE $PORT
 
-# Comando de inicio - Usar el script robusto
-# Asegurarse de que el script es ejecutable (aunque python lo ejecuta directamente)
-# RUN chmod +x ultra_robust_start.py # No estrictamente necesario si se llama con 'python script.py'
-
-CMD ["python", "ultra_robust_start.py"]
+# Comando de inicio - Usar el NUEVO script de emergencia
+# El script tiene instrucciones explícitas para mantenerse en /app
+CMD ["python", "emergency_start_railway.py"]
