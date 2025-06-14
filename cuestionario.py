@@ -5,7 +5,7 @@ from typing import Dict, List, Any, Optional
 # Importaciones relativas
 # Asegúrate de que AppState, config_logic, eval_logic, db_logic, error_callout,
 # PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME están definidos y accesibles en state.py
-from .state import AppState, BACKEND_AVAILABLE, config_logic, eval_logic, db_logic, error_callout, PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME
+from state import AppState, BACKEND_AVAILABLE, config_logic, eval_logic, db_logic, error_callout, PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME
 import asyncio
 import traceback
 import random
@@ -16,7 +16,7 @@ import re  # Añadimos la importación de re para usar re.sub
 # from fpdf import FPDF # ¡Eliminar esta importación ya que la lógica se moverá a utils.py!
 
 # Importar la función de generación de PDF desde utils.py
-from .utils import generate_pdf_report_from_answers # Asumiendo que utils.py está en mi_app_estudio/
+from utils import generate_pdf_report_from_answers # Asumiendo que utils.py está en mi_app_estudio/
 
 # --- Constantes ---
 NUM_QUESTIONS = 15  # Número de preguntas por cuestionario

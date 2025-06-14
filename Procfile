@@ -1,1 +1,1 @@
-web: python -m reflex run --backend-host 0.0.0.0 --backend-port $PORT
+web: python ultra_robust_start.py

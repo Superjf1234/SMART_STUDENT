@@ -39,12 +39,12 @@ def main():
         print("ERROR: Main app file not found")
         return 1
     
-    # Comando de inicio simplificado para Railway
+    # Comando de inicio
     cmd = [
         sys.executable, '-m', 'reflex', 'run',
+        '--env', 'prod',
         '--backend-host', host,
-        '--backend-port', port,
-        '--frontend-port', port
+        '--backend-port', port
     ]
     
     print(f"Executing: {' '.join(cmd)}")

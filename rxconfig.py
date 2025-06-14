@@ -2,7 +2,7 @@ import reflex as rx
 import os
 
 config = rx.Config(
-    app_name="mi_app_estudio",
+    app_name="app_main",
     title="Smart Student | Aprende, Crea y Destaca",
     
     # Eliminar warnings

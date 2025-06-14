@@ -41,7 +41,7 @@ def test_import():
     """Probar importación del módulo principal."""
     try:
         print("Testing app import...")
-        import mi_app_estudio.mi_app_estudio
+        import app_main
         print("✅ App import successful")
         return True
     except Exception as e:

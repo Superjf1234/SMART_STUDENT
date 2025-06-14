@@ -302,7 +302,7 @@ def get_safe_var_list(var_list, default=None):
 # --- IMPORTACIONES DE SUB-ESTADOS ---
 # Importar CuestionarioState para poder obtener su instancia
 try:
-    from .cuestionario import CuestionarioState
+    from cuestionario import CuestionarioState
 except ImportError:
     CuestionarioState = None # Handle case where file might not exist yet
 
@@ -2691,7 +2691,7 @@ class AppState(rx.State):
     async def download_cuestionario_pdf(self):
         """Descarga el cuestionario actual en formato PDF"""
         # Importamos solo cuando se necesita para evitar dependencias circulares
-        from .cuestionario import CuestionarioState
+        from cuestionario import CuestionarioState
         
         print("DEBUG: Iniciando download_cuestionario_pdf...")
         

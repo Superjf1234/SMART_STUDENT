@@ -68,7 +68,7 @@ class EvaluationState(rx.State):
 # Importar el módulo CuestionarioState para cuestionarios
 # CAMBIO: Usar importación relativa para evitar problemas de módulo
 try:
-    from .cuestionario import CuestionarioState, cuestionario_tab_content
+    from cuestionario import CuestionarioState, cuestionario_tab_content
     print("✅ CuestionarioState importado correctamente")
 except ImportError as e:
     print(f"⚠️ Warning: No se pudo importar CuestionarioState: {e}")
@@ -80,7 +80,7 @@ except ImportError as e:
 
 # Importar componentes optimizados para mensajes de revisión
 try:
-    from .review_components import mensaje_respuesta_correcta, mensaje_respuesta_incorrecta
+    from review_components import mensaje_respuesta_correcta, mensaje_respuesta_incorrecta
     print("✅ Review components importados correctamente")
 except ImportError as e:
     print(f"⚠️ Warning: No se pudieron importar review_components: {e}")
@@ -89,7 +89,7 @@ except ImportError as e:
     def mensaje_respuesta_incorrecta():
         return rx.text("❌ Incorrecto", color="red")
 
-from .state import AppState, PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME, GOOGLE_FONT_STYLESHEET, FONT_FAMILY, error_callout # Importa AppState y constantes/helpers necesarios desde state.py
+from state import AppState, PRIMARY_COLOR_SCHEME, ACCENT_COLOR_SCHEME, GOOGLE_FONT_STYLESHEET, FONT_FAMILY, error_callout # Importa AppState y constantes/helpers necesarios desde state.py
 
 # --- FUNCIÓN SIMPLIFICADA PARA MOSTRAR LAS PREGUNTAS ACTIVAS ---
 def vista_pregunta_activa():
