@@ -144,8 +144,6 @@ def vista_pregunta_activa():
         width="100%",
         max_width="800px"
     )
-                                    ),
-                                ),
                                 # Sección de Explicación (en modo revisión)
                                 rx.cond(
                                     EvaluationState.is_reviewing_eval & (EvaluationState.get_current_explanation != ""),
