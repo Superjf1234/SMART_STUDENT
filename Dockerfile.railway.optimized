@@ -11,16 +11,16 @@ ENV NODE_ENV=development
 ENV PATH="/root/.bun/bin:$PATH"
 
 # Instalar dependencias del sistema (incluyendo git y unzip)
-RUN apt-get update && apt-get install -y \\
-    wget \\
-    gnupg \\
-    curl \\
-    unzip \\
-    git \\
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    curl \
+    unzip \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar Node.js (versión 18.x)
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \\
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs
 
 # Instalar Bun
