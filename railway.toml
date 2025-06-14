@@ -5,7 +5,7 @@
 builder = "nixpacks"
 nixpacksConfigPath = "nixpacks.toml"
 
-# Comando de inicio personalizado - esencial para ejecutar nuestro script
+# Comando de inicio personalizado - sin usar cd
 [deploy]
-startCommand = "cd /app && python emergency_start_railway.py"
+startCommand = "python emergency_start_railway.py"
 restartPolicyType = "on_failure"

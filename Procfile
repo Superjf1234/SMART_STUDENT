@@ -1,1 +1,1 @@
-web: cd /app && python emergency_start_railway.py
+web: python emergency_start_railway.py

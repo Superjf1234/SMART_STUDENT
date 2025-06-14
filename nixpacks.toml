@@ -11,4 +11,4 @@ cmds = [
 ]
 
 [start]
-cmd = "cd /app && python emergency_start_railway.py"
+cmd = "python emergency_start_railway.py"
