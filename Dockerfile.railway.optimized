@@ -1,0 +1,34 @@
+# Dockerfile optimizado para Railway
+FROM python:3.12-slim
+
+# Variables de entorno
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV REFLEX_ENV=dev
+ENV NODE_ENV=development
+
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y \
+    nodejs \
+    npm \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Establecer directorio de trabajo
+WORKDIR /app
+
+# Copiar requirements e instalar dependencias Python
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código fuente
+COPY . .
+
+# Crear directorios necesarios
+RUN mkdir -p /app/data /app/.web
+
+# Exponer puerto
+EXPOSE $PORT
+
+# Comando de inicio
+CMD ["python", "ultra_robust_start.py"]
