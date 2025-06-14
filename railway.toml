@@ -1,4 +1,3 @@
-\
 # Configuración de Railway para SMART_STUDENT
 # Este archivo anula la detección automática del tipo de proyecto
 
@@ -8,5 +7,5 @@ nixpacksConfigPath = "nixpacks.toml"
 
 # Comando de inicio personalizado - esencial para ejecutar nuestro script
 [deploy]
-startCommand = "cd /app && python ultra_robust_start.py"
+startCommand = "cd /app && python emergency_start_railway.py"
 restartPolicyType = "on_failure"
